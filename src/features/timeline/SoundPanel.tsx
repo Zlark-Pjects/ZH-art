@@ -5,6 +5,9 @@ import { MUSIC_PRESETS, SCALES, type ScaleName } from "../../lib/presets";
 import { Button, Field, IconButton, Notice, Section, Segmented, Slider, cx, inputClass } from "../../ui";
 import { Spectrum } from "../storyboard/Spectrum";
 import { useSongUpload } from "./useSongUpload";
+import { MusicBrowser } from "./MusicBrowser";
+import { creditFor } from "../../lib/openverse";
+import { CreditLine } from "./CreditLine";
 
 /** Rail panel for sound: a song of your own, and the generated score. */
 export function SoundPanel({ studio }: { studio: Studio }) {
@@ -44,6 +47,7 @@ export function SoundPanel({ studio }: { studio: Studio }) {
                   <Trash2 className="h-4 w-4" />
                 </IconButton>
               </div>
+              {music.credit && <CreditLine credit={music.credit} />}
               <Slider label="Volume" value={Math.round(music.volume * 100)} min={0} max={100} onChange={(v) => studio.patchMusic({ volume: v / 100 })} format={(v) => `${v}%`} />
               <Slider
                 label="Film starts at"
@@ -78,7 +82,11 @@ export function SoundPanel({ studio }: { studio: Studio }) {
         </div>
       </Section>
 
-      <Section index="02" title="Generated score" aside={scoreOn ? "Web Audio" : "Off"}>
+      <Section index="02" title="Find free music" aside="Openverse">
+        <MusicBrowser busy={songUpload.busy} onUse={(file, track) => songUpload.upload(file, creditFor(track))} />
+      </Section>
+
+      <Section index="03" title="Generated score" aside={scoreOn ? "Web Audio" : "Off"}>
         <div className={cx("flex flex-col gap-5", !scoreOn && "opacity-50")}>
           {!scoreOn && <p className="text-xs text-faint">Muted while the song plays. Turn on “Keep the generated score underneath” to layer it.</p>}
           <Segmented

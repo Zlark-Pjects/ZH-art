@@ -96,6 +96,23 @@ export interface MusicTrack {
   peaks: number[];
   /** Keep the generated score playing under the song */
   withScore: boolean;
+  /** Where a song from the free music browser came from, and how to credit it */
+  credit?: MusicCredit;
+}
+
+export interface MusicCredit {
+  title: string;
+  creator: string;
+  creatorUrl?: string;
+  /** e.g. "CC BY 4.0" */
+  license: string;
+  licenseUrl: string;
+  /** The track's page at its source */
+  sourceUrl: string;
+  /** e.g. "Jamendo" */
+  provider: string;
+  /** Ready-to-paste credit line */
+  attribution: string;
 }
 
 /* ---------- Studio project ---------- */

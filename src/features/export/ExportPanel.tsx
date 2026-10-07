@@ -5,6 +5,7 @@ import { Button, Field, Notice, Progress, Section, Segmented } from "../../ui";
 import { saveFile } from "../../lib/saveFile";
 import { recordStoryboard, supportedRecordingType, type ExportOptions } from "./recordStoryboard";
 import { encodeFilm, fastExportFormat, type FastFormat } from "./encodeFilm";
+import { CreditLine } from "../timeline/CreditLine";
 
 const RESOLUTIONS = {
   "720p": { width: 1280, height: 720, label: "720p" },
@@ -169,6 +170,12 @@ export function ExportPanel({ studio }: { studio: Studio }) {
             {music ? (music.withScore ? "Include the song and score" : "Include the song") : "Include the score"}
             <input type="checkbox" checked={withAudio} onChange={(e) => setWithAudio(e.target.checked)} className="h-4 w-4 accent-[var(--color-accent)]" />
           </label>
+          {music?.credit && withAudio && (
+            <div className="mt-4 flex flex-col gap-2">
+              <p className="text-xs leading-relaxed text-faint">The song's licence asks you to credit the artist wherever you share the film, for example in the description:</p>
+              <CreditLine credit={music.credit} />
+            </div>
+          )}
         </Section>
         <div className="flex flex-col gap-4 border-t border-line pt-6 pb-8">
           {recording && <Progress value={(progress ?? 0) * 100} label={STAGE_LABEL[stage]} />}

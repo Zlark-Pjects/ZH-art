@@ -38,6 +38,11 @@ jobs:
         env:
           CI: "true"
 
+      - name: Free music hosts (informational)
+        if: always()
+        continue-on-error: true
+        run: node scripts/check-openverse.mjs
+
       - name: Keep the test report if anything failed
         if: failure()
         uses: actions/upload-artifact@v4
