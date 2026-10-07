@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from "react";
 import type { CharacterLook, MotionId, RigClip } from "../types";
 import { STANDING_POSE } from "../project/rig";
 import { newId } from "../project/storage";
+import { TAKE_FPS, useMotionCapture } from "../features/mocap/useMotionCapture";
 import { Button, Field, IconButton, Notice, Slider, inputClass } from "../ui";
 import {
   Bone,
@@ -140,13 +141,21 @@ export default function RiggingMoCap({
   const [motionIntensity, setMotionIntensity] = useState<number>(1);
   
   // Camera MoCap states
-  const [cameraActive, setCameraActive] = useState(false);
-  const [cameraError, setCameraError] = useState("");
-  const [cameraTracking, setCameraTracking] = useState(false);
   
   // Timeline/Keyframes
   const [keyframes, setKeyframes] = useState<Keyframe[]>([]);
   const [isPlayingTimeline, setIsPlayingTimeline] = useState(false);
+  const [frameSeconds, setFrameSeconds] = useState(0.8);
+  const [takeNotice, setTakeNotice] = useState("");
+
+  // Real webcam motion capture (on-device pose tracking)
+  const mocap = useMotionCapture((frames, seconds) => {
+    setKeyframes(frames.map((pose, n) => ({ id: `take_${Date.now()}_${n}`, joints: pose })));
+    setFrameSeconds(seconds);
+    setCurrentFrameIndex(0);
+    setJoints((current) => current.map((j) => (frames[0][j.id] ? { ...j, ...frames[0][j.id] } : j)));
+    setTakeNotice(`Recorded a ${(frames.length * seconds).toFixed(1)}s take (${frames.length} frames). Play it back, or save it as a clip.`);
+  });
   const [currentFrameIndex, setCurrentFrameIndex] = useState(0);
   
   // Project characters appear alongside the built-in rig styles
@@ -163,8 +172,6 @@ export default function RiggingMoCap({
     ...CHARACTER_PRESETS,
   ];
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const streamRef = useRef<MediaStream | null>(null);
   const animationFrameId = useRef<number | null>(null);
   const motionTime = useRef<number>(0);
 
@@ -216,43 +223,6 @@ export default function RiggingMoCap({
     setActiveMotion(null);
   };
 
-  // Turn Webcam on/off
-  const toggleCamera = async () => {
-    if (cameraActive) {
-      if (streamRef.current) {
-        streamRef.current.getTracks().forEach(track => track.stop());
-      }
-      streamRef.current = null;
-      setCameraActive(false);
-      setCameraTracking(false);
-    } else {
-      setCameraError("");
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia({
-          video: { width: 320, height: 240, facingMode: "user" }
-        });
-        if (videoRef.current) {
-          videoRef.current.srcObject = stream;
-        }
-        streamRef.current = stream;
-        setCameraActive(true);
-        setCameraTracking(true);
-        setActiveMotion(null); // Overwrite procedural motions with camera sway!
-      } catch (err: any) {
-        console.error("Camera access failed", err);
-        setCameraError("Webcam access denied. Please ensure browser permissions are configured.");
-      }
-    }
-  };
-
-  useEffect(() => {
-    return () => {
-      if (streamRef.current) {
-        streamRef.current.getTracks().forEach(track => track.stop());
-      }
-    };
-  }, []);
-
   // Timeline Player Loop
   useEffect(() => {
     if (!isPlayingTimeline || keyframes.length === 0) return;
@@ -272,10 +242,10 @@ export default function RiggingMoCap({
         });
         return nextIndex;
       });
-    }, 800);
+    }, frameSeconds * 1000);
 
     return () => clearInterval(interval);
-  }, [isPlayingTimeline, keyframes]);
+  }, [isPlayingTimeline, keyframes, frameSeconds]);
 
   // Main canvas animation and joint update loop
   useEffect(() => {
@@ -289,10 +259,11 @@ export default function RiggingMoCap({
       const t = motionTime.current;
 
       // Local copy of joints to render (with motion offsets if active)
-      let renderedJoints = [...joints];
+      const live = !isPlayingTimeline ? mocap.livePose.current : null;
+      let renderedJoints = live ? joints.map((j) => (live[j.id] ? { ...j, ...live[j.id] } : j)) : [...joints];
 
       // 1. Procedural Motion Synthesis (Skeletal Sinusoidal Deformations)
-      if (activeMotion) {
+      if (activeMotion && !live) {
         const i = motionIntensity;
         renderedJoints = joints.map(j => {
           let dx = 0;
@@ -642,9 +613,8 @@ export default function RiggingMoCap({
       // RENDER HUD overlay data inside canvas
       ctx.fillStyle = "rgba(255,255,255,0.3)";
       ctx.font = "8px monospace";
-      ctx.fillText(`MO_CAP_STREAM: ${cameraActive ? "LIVE_FEED_SYNCED" : "PROCEDURAL_SYNTH"}`, 12, 20);
+      ctx.fillText(`SOURCE: ${live ? "WEBCAM MOTION CAPTURE" : activeMotion ? "PROCEDURAL MOTION" : "MANUAL POSE"}`, 12, 20);
       ctx.fillText(`ACTIVE_MESH: ${selectedChar.name.toUpperCase()}`, 12, 32);
-      ctx.fillText(`MOCAP_SYSTEMS: ACTIVE`, 12, 44);
 
       if (activeJoint) {
         const selNode = renderedJoints.find(j => j.id === activeJoint);
@@ -665,7 +635,7 @@ export default function RiggingMoCap({
         cancelAnimationFrame(animationFrameId.current);
       }
     };
-  }, [joints, activeJoint, selectedChar, activeMotion, motionSpeed, motionIntensity]);
+  }, [joints, activeJoint, selectedChar, activeMotion, motionSpeed, motionIntensity, isPlayingTimeline]);
 
   // Handle Dragging of Skeleton Nodes
   const handleMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
@@ -747,7 +717,7 @@ export default function RiggingMoCap({
               <h2 className="text-xs uppercase tracking-widest font-semibold text-fg/80">Motion rig</h2>
             </div>
             <p className="text-xs text-muted max-w-xl">
-              Pose the skeleton by dragging joints, layer a motion on top, or record keyframes. Save the result as a clip, then cast it in any storyboard scene.
+              Pose the skeleton by dragging joints, layer a motion on top, record keyframes, or act it out on your webcam. Save the result as a clip, then cast it in any storyboard scene.
             </p>
           </div>
           <span className="text-[11px] font-mono bg-fg/[0.05] text-fg px-2 py-1 border border-fg/60 uppercase tracking-widest">
@@ -844,7 +814,7 @@ export default function RiggingMoCap({
                   key={m.id}
                   onClick={() => {
                     setActiveMotion(m.id);
-                    setCameraTracking(false);
+                    if (mocap.status !== "off") mocap.stop();
                   }}
                   className={`p-2.5 text-left border cursor-pointer rounded-xs transition-all relative overflow-hidden flex items-center justify-between gap-3 ${
                     activeMotion === m.id
@@ -950,7 +920,7 @@ export default function RiggingMoCap({
                   <span>Active Frame: {currentFrameIndex + 1}</span>
                 </div>
                 <div className="flex gap-1.5 overflow-x-auto pb-1 scrollbar-thin">
-                  {keyframes.map((kf, idx) => (
+                  {keyframes.slice(0, 24).map((kf, idx) => (
                     <div
                       key={kf.id}
                       className={`h-11 w-11 shrink-0 border rounded-xs flex flex-col items-center justify-center relative group select-none transition-all ${
@@ -971,6 +941,9 @@ export default function RiggingMoCap({
                       </button>
                     </div>
                   ))}
+                  {keyframes.length > 24 && (
+                    <span className="flex h-11 shrink-0 items-center px-2 font-mono text-[11px] text-muted">+{keyframes.length - 24} more</span>
+                  )}
                 </div>
               </div>
             )}
@@ -998,42 +971,11 @@ export default function RiggingMoCap({
               />
             </div>
 
-            {/* Floating Live Camera Picture-In-Picture Overlay */}
-            {cameraActive && (
-              <div className="absolute bottom-4 left-4 w-32 md:w-44 bg-black/90 border border-fg/60 rounded-sm overflow-hidden shadow-2xl flex flex-col z-20">
-                <div className="relative w-full aspect-[4/3] bg-surface overflow-hidden">
-                  <video
-                    ref={videoRef}
-                    autoPlay
-                    playsInline
-                    muted
-                    className="w-full h-full object-cover scale-x-[-1]"
-                  />
-                </div>
-                <div className="py-1 px-2 flex justify-between items-center text-[11px] font-mono bg-black border-t border-line">
-                  <span className="text-muted uppercase tracking-wider">Reference mirror</span>
-                </div>
-              </div>
-            )}
-
             {/* Absolute HUD Top bar overlay */}
             <div className="absolute top-4 left-4 right-4 flex justify-between items-center pointer-events-none z-10">
               <span className="bg-black/80 px-2.5 py-1 text-[11px] font-mono text-fg uppercase tracking-widest border border-fg/60 rounded-sm">
                 Rig · drag the joints
               </span>
-              <div className="flex gap-2 pointer-events-auto">
-                <button
-                  onClick={toggleCamera}
-                  className={`px-3 py-1 text-[11px] font-mono uppercase rounded-sm border transition-all cursor-pointer flex items-center gap-1.5 ${
-                    cameraActive 
-                      ? "bg-danger/10 text-danger border-danger/30" 
-                      : "bg-fg/[0.05] text-fg border-fg/60 hover:border-fg/60"
-                  }`}
-                >
-                  <Camera className="w-3.5 h-3.5" />
-                  {cameraActive ? "Hide mirror" : "Reference mirror"}
-                </button>
-              </div>
             </div>
 
             {/* Hover Tooltip or Guidance */}
@@ -1043,22 +985,30 @@ export default function RiggingMoCap({
             </div>
           </div>
 
-          {/* Webcam Access Error messaging */}
-          {cameraError && (
-            <div className="bg-danger/10 border border-danger/30 p-3.5 rounded-xs flex items-start gap-3 text-danger text-xs">
-              <AlertCircle className="w-5 h-5 text-danger shrink-0" />
-              <div>
-                <span className="font-bold uppercase tracking-wider block mb-0.5">Camera Error</span>
-                <p className="leading-relaxed text-danger/80">{cameraError}</p>
-              </div>
-            </div>
-          )}
+          <CapturePanel
+            mocap={mocap}
+            notice={takeNotice}
+            onStart={() => {
+              setActiveMotion(null);
+              setIsPlayingTimeline(false);
+              setTakeNotice("");
+              mocap.start();
+            }}
+            onSnap={() => {
+              const live = mocap.livePose.current;
+              if (!live) return;
+              setJoints((current) => current.map((j) => (live[j.id] ? { ...j, ...live[j.id] } : j)));
+              setActiveMotion(null);
+              setTakeNotice("Copied your pose onto the rig.");
+            }}
+          />
 
-          <ClipSaver joints={joints} keyframes={keyframes} activeMotion={activeMotion} motionSpeed={motionSpeed} motionIntensity={motionIntensity} clips={clips} onSave={onSaveClip} onDelete={onDeleteClip} onLoad={(clip) => {
+          <ClipSaver frameSeconds={frameSeconds} setFrameSeconds={setFrameSeconds} joints={joints} keyframes={keyframes} activeMotion={activeMotion} motionSpeed={motionSpeed} motionIntensity={motionIntensity} clips={clips} onSave={onSaveClip} onDelete={onDeleteClip} onLoad={(clip) => {
             setJoints((current) => current.map((j) => (clip.pose[j.id] ? { ...j, ...clip.pose[j.id] } : j)));
             setActiveMotion(clip.motion);
             setMotionSpeed(clip.speed);
             setMotionIntensity(clip.intensity);
+            setFrameSeconds(clip.keyframeSeconds);
             setKeyframes(clip.keyframes.map((k, n) => ({ id: `kf_${n}_${Date.now()}`, joints: k })));
           }} />
         </div>
@@ -1071,6 +1021,8 @@ export default function RiggingMoCap({
 
 /** Save the current pose, motion and keyframes as a clip the storyboard can cast. */
 function ClipSaver({
+  frameSeconds,
+  setFrameSeconds,
   joints,
   keyframes,
   activeMotion,
@@ -1081,6 +1033,8 @@ function ClipSaver({
   onDelete,
   onLoad,
 }: {
+  frameSeconds: number;
+  setFrameSeconds: (v: number) => void;
   joints: Joint[];
   keyframes: Keyframe[];
   activeMotion: string | null;
@@ -1092,7 +1046,6 @@ function ClipSaver({
   onLoad: (clip: RigClip) => void;
 }) {
   const [name, setName] = useState("");
-  const [frameSeconds, setFrameSeconds] = useState(0.8);
   const [saved, setSaved] = useState("");
 
   const save = (existing?: RigClip) => {
@@ -1127,7 +1080,8 @@ function ClipSaver({
       <Field label="Clip name" htmlFor="clip-name">
         <input id="clip-name" value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Hero runs in" className={inputClass} />
       </Field>
-      {keyframes.length > 1 && (
+      {keyframes.length > 1 && frameSeconds < 0.2 && <p className="text-xs text-faint">Motion-capture take: {keyframes.length} frames over {(keyframes.length * frameSeconds).toFixed(1)}s.</p>}
+      {keyframes.length > 1 && frameSeconds >= 0.2 && (
         <Slider label="Time per keyframe" value={frameSeconds} min={0.2} max={2} step={0.1} onChange={setFrameSeconds} format={(v) => `${v.toFixed(1)}s`} />
       )}
       <Button variant="primary" onClick={() => save()}>
@@ -1153,6 +1107,103 @@ function ClipSaver({
           ))}
         </ul>
       )}
+    </div>
+  );
+}
+
+/** Webcam motion capture: live preview with tracked skeleton, snap a pose, record takes. */
+function CapturePanel({
+  mocap,
+  notice,
+  onStart,
+  onSnap,
+}: {
+  mocap: ReturnType<typeof useMotionCapture>;
+  notice: string;
+  onStart: () => void;
+  onSnap: () => void;
+}) {
+  const on = mocap.status !== "off" && mocap.status !== "error";
+  const tracking = mocap.status === "tracking";
+  const statusText =
+    mocap.status === "starting"
+      ? "Waiting for the camera…"
+      : mocap.status === "loading"
+        ? "Loading the pose model (about 6 MB, first time only)…"
+        : tracking
+          ? mocap.personVisible
+            ? "Tracking you"
+            : "Step back until your upper body is in frame"
+          : "Camera off";
+
+  return (
+    <div className="flex flex-col gap-4 border border-line bg-surface p-5">
+      <div className="flex items-baseline justify-between gap-3">
+        <h3 className="text-[15px] font-medium text-fg">Webcam motion capture</h3>
+        <span className="eyebrow flex items-center gap-2">
+          <span
+            aria-hidden
+            className={`h-1.5 w-1.5 rounded-full ${tracking && mocap.personVisible ? "bg-ok" : on ? "bg-accent" : "bg-faint"}`}
+          />
+          <span aria-live="polite">{statusText}</span>
+        </span>
+      </div>
+
+      <div className={`relative overflow-hidden bg-black ring-1 ring-line ${on ? "aspect-[4/3]" : "hidden"}`}>
+        <video ref={mocap.videoRef} autoPlay playsInline muted className="absolute inset-0 h-full w-full -scale-x-100 object-cover opacity-70" />
+        <canvas ref={mocap.overlayRef} className="absolute inset-0 h-full w-full object-cover" aria-hidden />
+        {mocap.recordState === "countdown" && (
+          <div className="absolute inset-0 flex items-center justify-center bg-black/40">
+            <span className="font-display text-[22vmin] leading-none text-fg xl:text-[10rem]">{mocap.countdown}</span>
+          </div>
+        )}
+        {mocap.recordState === "recording" && (
+          <span className="eyebrow absolute left-3 top-3 flex items-center gap-2 bg-black/70 px-2 py-1 text-fg">
+            <span className="h-2 w-2 animate-pulse rounded-full bg-danger" aria-hidden /> Rec {mocap.recordSeconds.toFixed(1)}s
+          </span>
+        )}
+      </div>
+
+      {!on && (
+        <p className="text-[13px] leading-relaxed text-muted">
+          Act out a motion and the rig follows you. Tracking runs entirely on this device; the video never leaves your browser.
+        </p>
+      )}
+      {mocap.error && <Notice tone="error">{mocap.error}</Notice>}
+
+      <div className="flex flex-wrap gap-2">
+        {!on ? (
+          <Button variant="primary" icon={<Camera className="h-4 w-4" />} onClick={onStart}>
+            Start camera
+          </Button>
+        ) : (
+          <>
+            {mocap.recordState === "idle" && (
+              <Button variant="primary" onClick={mocap.record} disabled={!tracking}>
+                Record take
+              </Button>
+            )}
+            {mocap.recordState === "countdown" && <Button onClick={mocap.cancelCountdown}>Cancel</Button>}
+            {mocap.recordState === "recording" && (
+              <Button variant="danger" onClick={mocap.stopRecording}>
+                Stop take
+              </Button>
+            )}
+            <Button onClick={onSnap} disabled={!tracking || !mocap.personVisible || mocap.recordState !== "idle"}>
+              Copy pose to rig
+            </Button>
+            <Button variant="ghost" onClick={mocap.stop}>
+              Stop camera
+            </Button>
+          </>
+        )}
+      </div>
+      {on && (
+        <p className="text-xs leading-relaxed text-faint">
+          Face the camera with your upper body in frame; full body works best. Takes record at up to {TAKE_FPS} fps for up to 20 seconds, after a 3-second countdown.
+        </p>
+      )}
+      {notice && <Notice>{notice}</Notice>}
     </div>
   );
 }

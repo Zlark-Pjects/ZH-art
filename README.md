@@ -11,7 +11,7 @@ All five parts work on **one project**, which autosaves in your browser.
 | **Storyboard** | Write an idea and **Build**: an offline composer reads places and things in it (space, ocean, forest, city, fire, snow, desert…) and lays out scenes with a story arc, palette, camera moves, shapes, particles and a score. Then edit anything by hand: words, timing, colours, camera, shapes (drag them on the picture), particles, a backdrop photo, and cast. **Another take** re-rolls; **Undo** reverts a build. | Everything |
 | **Looks** | A curated library of palettes and atmospheres. Preview one on the current scene, then apply it to every scene. | Storyboard colours, particles, score |
 | **Characters** | Design faces, hair, colours and costume; save characters to the project; set the film's colour grade. | Cast, Motion rig, grade on stage and export |
-| **Motion rig** | Drag joints to pose, layer a motion (run, float, lunge…), record keyframes, save as a clip. | Cast clips |
+| **Motion rig** | Drag joints to pose, layer a motion (run, float, lunge…), record keyframes, or **act it out on your webcam**: on-device pose tracking drives the rig live and records takes. Save as a clip. | Cast clips |
 | **Edit & export** | Reorder scenes, start from templates, record the film with its score to MP4/WebM. | The finished video |
 
 **Projects** (top right): switch between projects, start new ones, duplicate, delete, and save/open `.zhart.json` project files to back up or move work between computers.
@@ -33,6 +33,10 @@ NODE_ENV=production npm start   # honours PORT
 ```
 
 The server only hosts the app; it has no API endpoints.
+
+### Motion capture
+
+Webcam capture uses MediaPipe Pose Landmarker running in the browser. The model (`public/models/pose_landmarker_lite.task`) is committed, and the WASM runtime is copied from `node_modules` into `public/mediapipe/` on install and build (`scripts/copy-mediapipe.mjs`), so the app serves everything itself: no CDN, and camera video never leaves the device. Browsers only allow camera access over HTTPS or on localhost.
 
 ## Layout
 

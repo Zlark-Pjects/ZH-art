@@ -6,3 +6,6 @@ coverage/
 *.log
 .env*
 !.env.example
+
+# MediaPipe runtime is copied from node_modules at install/build time
+public/mediapipe/
