@@ -8,8 +8,9 @@ import { STANDING_POSE, type Pose } from "../../project/rig";
  * or pose data leaves the browser.
  */
 
-const WASM_PATH = "/mediapipe/wasm";
-const MODEL_PATH = "/models/pose_landmarker_lite.task";
+// Relative to wherever the app is served from
+const WASM_PATH = `${import.meta.env.BASE_URL}mediapipe/wasm`;
+const MODEL_PATH = `${import.meta.env.BASE_URL}models/pose_landmarker_lite.task`;
 
 let landmarkerPromise: Promise<PoseLandmarker> | null = null;
 
