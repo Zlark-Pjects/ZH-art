@@ -8,12 +8,12 @@ All five parts work on **one project**, which autosaves in your browser.
 
 | Part | What you do there | Feeds into |
 | --- | --- | --- |
-| **Storyboard** | Write an idea and **Build**: an offline composer reads places and things in it (space, ocean, forest, city, fire, snow, desert…) and lays out scenes with a story arc, palette, camera moves, shapes, particles and a score. Then edit anything by hand: words, timing, colours, camera (a preset move, or **camera keyframes** with zoom, pan, rise and easing, previewed at the playhead), shapes (drag them on the picture), particles, a backdrop photo, and cast. **Another take** re-rolls; **Undo** reverts a build; or open one of the sample films. | Everything |
+| **Storyboard** | Write an idea and **Build**: an offline composer reads places and things in it (space, ocean, forest, city, fire, snow, desert…) and lays out scenes with a story arc, palette, camera moves, shapes, particles and a score. Then edit anything by hand: words, timing, colours, cast that walks, flies or slides along keyed paths, camera (a preset move, or **camera keyframes** with zoom, pan, rise and easing, previewed at the playhead), shapes (drag them on the picture), particles, a backdrop photo, and cast. **Another take** re-rolls; **Undo** reverts a build; or open one of the sample films. | Everything |
 | **Timeline** (under the picture) | Scenes, text and music on tracks under one playhead. Drag scenes to reorder and their edges to trim, split at the playhead, and pick a transition between any two scenes (cut, fade, wipe, zoom, flash). Add titles and captions (pop, slide, typewriter, fade). Add **your own song**: its tempo and beats are found on your device, cuts snap to them, and **Cut on beat** moves every cut onto the nearest beat. Drag the song to choose which part plays. | The finished film |
 | **Looks** | A curated library of palettes and atmospheres. Preview one on the current scene, then apply it to every scene. The **film grade** (preset, contrast, saturation, vignette, tint) lives here and applies live. | Storyboard colours, particles, score, grade |
 | **Characters** | **Forge:** build whole characters from parts (body, head, eyes, hair, headgear, arms, legs, wings or cape, tail, held item), proportions and a palette — or generate them: pick an archetype (knight, beast, spirit, machine, insectoid, celestial, anything), *Surprise me*, mutate a little or a lot, breed two saved characters, lock what you like and reroll the rest. Every design comes from a seed, so it can be reproduced. Five body plans — two legs, four legs, flyer, serpent and floater — each with its own idle, walk, run, jump and attack loops. **Game export:** turn any character into a sprite sheet (PNG, one row per animation, including your own Motion clips and captured takes) with a Phaser-ready JSON atlas, or a zip with import notes for Godot, Unity and GameMaker. | Cast and Motion |
 | **Motion** | Pose your character by dragging its joints, then key poses over time. Each key has its own timing and easing (smooth, linear, ease in/out, overshoot, bounce, hold), with onion-skin ghosts of the neighbouring keys. Layer a procedural motion (run, float, lunge…) on top. Or **capture a performance** from your webcam or **any video file**, then trim, smooth and foot-lock the take, and choose how many keys per second to keep. Save as a clip. **Every body plan follows clips:** four-legged, flying, serpent and floating characters are retargeted from the skeleton (arms drive front legs, wings or a serpent's head; legs drive back legs; hips and lean move the body). | Cast clips |
-| **Export** | Record the film, with transitions, text, song and score, to MP4/WebM at 720p, 1080p, 9:16 or 1:1. | The finished video |
+| **Export** | Render the film, with transitions, text, song and score, to MP4/WebM at 720p, 1080p, 9:16 or 1:1. Frame by frame with WebCodecs where available (every frame exact, no need to play in real time), real-time recording elsewhere. | The finished video |
 
 **Projects** (top right): switch between projects, start new ones, duplicate, delete, and save/open `.zhart.json` project files to back up or move work between computers.
 
@@ -34,6 +34,15 @@ NODE_ENV=production npm start   # honours PORT
 ```
 
 The server only hosts the app; it has no API endpoints.
+
+### Tests
+
+```bash
+npm test             # builds, then runs the end-to-end tests in Chromium
+npm run test:e2e     # tests only, against an existing build
+```
+
+The tests (`tests/e2e/`) drive the real app: every tab, the timeline (split, trim, reorder, transitions, text, a song's beat), camera keys, moving cast, Motion clips, the Forge and sprite export, a video export, and phone layouts. They fail on any page error. GitHub Actions runs them on every push (`.github/workflows/ci.yml`).
 
 ### Motion capture
 

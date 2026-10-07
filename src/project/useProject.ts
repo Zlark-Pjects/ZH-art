@@ -68,6 +68,20 @@ export function useProject() {
     return () => clearTimeout(timer);
   }, [project]);
 
+  // Save straight away when the page is hidden or closed, so the last edit isn't lost
+  const latest = useRef(project);
+  latest.current = project;
+  useEffect(() => {
+    const flush = () => saveProject(latest.current);
+    const onHide = () => document.visibilityState === "hidden" && flush();
+    window.addEventListener("pagehide", flush);
+    document.addEventListener("visibilitychange", onHide);
+    return () => {
+      window.removeEventListener("pagehide", flush);
+      document.removeEventListener("visibilitychange", onHide);
+    };
+  }, []);
+
   /* ----- load image assets referenced by scenes ----- */
   const assetIds = useMemo(
     () => [...project.board.scenes.map((s) => s.backdrop), project.music?.assetId].filter((id): id is string => Boolean(id)),

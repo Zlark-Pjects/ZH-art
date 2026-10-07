@@ -11,7 +11,9 @@
     "start": "node dist/server.cjs",
     "clean": "rm -rf dist server.js",
     "lint": "tsc --noEmit",
-    "prebuild": "node scripts/copy-mediapipe.mjs"
+    "prebuild": "node scripts/copy-mediapipe.mjs",
+    "test": "npm run build && playwright test",
+    "test:e2e": "playwright test"
   },
   "dependencies": {
     "@mediapipe/tasks-vision": "^1.1.0",
@@ -26,6 +28,7 @@
     "vite": "^6.2.3"
   },
   "devDependencies": {
+    "@playwright/test": "^1.56.1",
     "@types/express": "^4.17.21",
     "@types/node": "^22.14.0",
     "@types/react": "^19.3.0",

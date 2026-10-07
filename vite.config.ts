@@ -12,12 +12,16 @@ export default defineConfig(() => {
       },
     },
     build: {
+      // The video encoder library (mediabunny, ~740 kB) is its own chunk, loaded only by the
+      // Export tab; everything the app loads up front stays well under this
+      chunkSizeWarningLimit: 800,
       rollupOptions: {
         output: {
           // React and the icon set change rarely: their own chunk caches across app updates
           manualChunks(id: string) {
             if (/node_modules\/(react|react-dom|scheduler)\//.test(id)) return 'react';
             if (id.includes('node_modules/lucide-react')) return 'icons';
+            if (id.includes('node_modules/mediabunny')) return 'video-encoder';
           },
         },
       },
