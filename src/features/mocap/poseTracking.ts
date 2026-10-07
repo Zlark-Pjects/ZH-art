@@ -34,9 +34,11 @@ export function loadLandmarker(): Promise<PoseLandmarker> {
       } catch {
         return await create("CPU");
       }
-    })().catch((err) => {
+    })().catch(() => {
       landmarkerPromise = null;
-      throw err;
+      throw new Error(
+        "Couldn't load the pose-tracking model. Motion capture needs ZH-art running from its own server (npm run dev or npm start); some embedded previews can't load it.",
+      );
     });
   }
   return landmarkerPromise;
