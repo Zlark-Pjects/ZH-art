@@ -1477,6 +1477,16 @@ function CharacterBar({
       costume: mixHex(look.costumeAccentColor, "#14141a", 0.72),
       hairStyle: look.hairStyle,
     };
+    // A forged character keeps its body; the portrait only updates its colours and hair
+    const kept = !asNew ? editing?.build : undefined;
+    if (kept) {
+      c.costume = editing!.costume;
+      c.build = {
+        ...kept,
+        parts: { ...kept.parts, hair: kept.parts.hair === "none" || kept.parts.hair === "mane" ? kept.parts.hair : look.hairStyle },
+        palette: { ...kept.palette, skin: c.skin, hair: c.hair, glow: c.eyes, accent: c.accent },
+      };
+    }
     onSave(c);
     setEditingId(c.id);
     setName(c.name);

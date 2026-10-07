@@ -4,11 +4,11 @@ import { useStudio } from "./features/useStudio";
 import { StoryboardView } from "./features/storyboard/StoryboardView";
 import { LooksView } from "./features/looks/LooksView";
 import { ProjectMenu } from "./features/ProjectMenu";
+import { CharactersView } from "./features/forge/CharactersView";
 import { Button, cx } from "./ui";
 import { Leader } from "./features/Leader";
 
 const RiggingMoCap = lazy(() => import("./components/RiggingMoCap"));
-const CreativeSuite = lazy(() => import("./components/CreativeSuite"));
 const ProductivityStudio = lazy(() => import("./components/ProductivityStudio"));
 
 const VIEWS = [
@@ -48,7 +48,7 @@ export default function App() {
       <header className="sticky top-0 z-40 border-b border-line bg-ink/90 backdrop-blur-md">
         <div className="mx-auto flex max-w-[1680px] items-center justify-between gap-4 px-4 pt-4 sm:px-8">
           <a href="/" className="flex items-baseline gap-3" aria-label="ZH-art home">
-            <span className="font-display text-[28px] uppercase leading-none tracking-[0.01em]">
+            <span className="whitespace-nowrap font-display text-[28px] uppercase leading-none tracking-[0.01em]">
               ZH<span className="text-accent">—</span>ART
             </span>
             <span className="eyebrow hidden sm:inline">Generative film studio</span>
@@ -101,7 +101,7 @@ export default function App() {
         <Suspense fallback={<p className="eyebrow py-24 text-center">Loading…</p>}>
           {panel(
             "characters",
-            <CreativeSuite
+            <CharactersView
               characters={studio.project.characters}
               grade={studio.project.grade}
               onSaveCharacter={studio.upsertCharacter}
@@ -161,7 +161,7 @@ function Guide({ onClose }: { onClose: () => void }) {
   const items = [
     ["Storyboard", "Write an idea and build: the composer reads places and things in it and lays out scenes, colours, camera moves and a score. Then edit anything — words, timing, palette, camera, shapes (drag them on the picture), particles, a backdrop photo, and cast."],
     ["Looks", "A library of colour and atmosphere. Preview one on the current scene, then apply it to every scene at once."],
-    ["Characters", "Design faces, hair, colours and costumes, save them to the project, and set the film's colour grade."],
+    ["Characters", "Forge whole characters from parts — bodies, heads, eyes, wings, tails, props — or let the generator surprise you: pick an archetype, mutate, breed two designs, and lock what you like. The portrait studio handles faces and the film's colour grade."],
     ["Motion rig", "Pose a skeleton, layer a motion like a run or a float, record keyframes, or act it out on your webcam — motion capture runs on your device and the video never leaves the browser. Save the result as a clip to cast in any scene."],
     ["Edit & export", "Reorder scenes, start from templates, and record the finished film with its score to a video file."],
   ];

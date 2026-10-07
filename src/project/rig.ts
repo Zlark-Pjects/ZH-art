@@ -157,53 +157,6 @@ export function poseAt(clip: RigClip, seconds: number): Pose {
   );
 }
 
-/* ---------- Figure geometry (shared by SVG stage and canvas export) ---------- */
-
-export interface FigureStroke {
-  x1: number;
-  y1: number;
-  x2: number;
-  y2: number;
-  width: number;
-  color: string;
-}
-
-export interface Figure {
-  strokes: FigureStroke[];
-  head: { x: number; y: number; r: number; skin: string; hair: string; eyes: string; hairStyle: CharacterLook["hairStyle"] };
-}
-
-const LIMBS: [string, string, number, "costume" | "skin" | "accent"][] = [
-  ["l_hip", "l_knee", 26, "costume"],
-  ["l_knee", "l_ankle", 22, "costume"],
-  ["r_hip", "r_knee", 26, "costume"],
-  ["r_knee", "r_ankle", 22, "costume"],
-  ["pelvis", "spine", 46, "costume"],
-  ["spine", "neck", 54, "costume"],
-  ["l_shoulder", "r_shoulder", 30, "costume"],
-  ["l_shoulder", "l_elbow", 22, "costume"],
-  ["l_elbow", "l_hand", 18, "skin"],
-  ["r_shoulder", "r_elbow", 22, "costume"],
-  ["r_elbow", "r_hand", 18, "skin"],
-  ["neck", "head", 16, "skin"],
-];
-
-/** Body segments for a pose in rig space, coloured by the character's look. */
-export function figureFor(pose: Pose, look: CharacterLook): Figure {
-  const color = { costume: look.costume, skin: look.skin, accent: look.accent };
-  const strokes: FigureStroke[] = [];
-  for (const [a, b, width, part] of LIMBS) {
-    const pa = pose[a];
-    const pb = pose[b];
-    if (!pa || !pb) continue;
-    strokes.push({ x1: pa.x, y1: pa.y, x2: pb.x, y2: pb.y, width, color: color[part] });
-  }
-  // Accent belt and cuffs
-  if (pose.l_hip && pose.r_hip) strokes.push({ x1: pose.l_hip.x, y1: pose.l_hip.y - 8, x2: pose.r_hip.x, y2: pose.r_hip.y - 8, width: 8, color: look.accent });
-  const head = pose.head ?? { x: 200, y: 90 };
-  return { strokes, head: { x: head.x, y: head.y, r: 38, skin: look.skin, hair: look.hair, eyes: look.eyes, hairStyle: look.hairStyle } };
-}
-
 /* ---------- Defaults ---------- */
 
 export const DEFAULT_CHARACTER: CharacterLook = {
@@ -236,21 +189,3 @@ export const GRADE_PRESETS: Record<Grade["preset"], Grade> = {
   gold: { preset: "gold", contrast: 108, saturation: 110, vignette: 40, tint: "#ffb224", tintAmount: 12 },
   vivid: { preset: "vivid", contrast: 115, saturation: 150, vignette: 30, tint: "#000000", tintAmount: 0 },
 };
-
-/** Head as filled paths (rig space), so SVG and canvas draw it identically. */
-export function headPaths(h: Figure["head"]): { d: string; fill: string }[] {
-  const { x, y, r } = h;
-  const circle = (cx: number, cy: number, rr: number) => `M${cx - rr} ${cy}a${rr} ${rr} 0 1 0 ${rr * 2} 0a${rr} ${rr} 0 1 0 ${-rr * 2} 0Z`;
-  const hair: Record<CharacterLook["hairStyle"], string> = {
-    sleek: `M${x - r - 2} ${y + 4}C${x - r} ${y - r * 1.5} ${x + r} ${y - r * 1.5} ${x + r + 2} ${y + 4}C${x + r * 0.4} ${y - r * 0.5} ${x - r * 0.4} ${y - r * 0.5} ${x - r - 2} ${y + 4}Z`,
-    quantum: `M${x - r} ${y}L${x - r * 0.9} ${y - r * 1.4}L${x - r * 0.4} ${y - r * 0.9}L${x - r * 0.1} ${y - r * 1.7}L${x + r * 0.3} ${y - r * 0.95}L${x + r * 0.8} ${y - r * 1.5}L${x + r} ${y}C${x + r * 0.4} ${y - r * 0.55} ${x - r * 0.4} ${y - r * 0.55} ${x - r} ${y}Z`,
-    mech: `M${x - r - 4} ${y - r * 0.1}L${x - r - 4} ${y - r * 0.9}Q${x} ${y - r * 1.45} ${x + r + 4} ${y - r * 0.9}L${x + r + 4} ${y - r * 0.1}Z`,
-    ethereal: `M${x - r - 2} ${y}C${x - r * 1.2} ${y - r * 1.6} ${x + r * 1.2} ${y - r * 1.6} ${x + r + 2} ${y}C${x + r * 1.6} ${y + r * 1.4} ${x + r * 1.1} ${y + r * 2.2} ${x + r * 0.7} ${y + r * 2.6}C${x + r * 0.8} ${y + r} ${x + r * 0.5} ${y - r * 0.4} ${x} ${y - r * 0.55}C${x - r * 0.5} ${y - r * 0.4} ${x - r * 0.8} ${y + r} ${x - r * 0.7} ${y + r * 2.6}C${x - r * 1.1} ${y + r * 2.2} ${x - r * 1.6} ${y + r * 1.4} ${x - r - 2} ${y}Z`,
-  };
-  return [
-    { d: circle(x, y, r), fill: h.skin },
-    { d: hair[h.hairStyle] ?? hair.sleek, fill: h.hair },
-    { d: circle(x - r * 0.36, y + r * 0.1, r * 0.13), fill: h.eyes },
-    { d: circle(x + r * 0.36, y + r * 0.1, r * 0.13), fill: h.eyes },
-  ];
-}

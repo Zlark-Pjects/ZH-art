@@ -1,6 +1,7 @@
 import { useId, useRef, type PointerEvent as ReactPointerEvent } from "react";
 import type { CharacterLook, Grade, RigClip, Scene } from "../../types";
 import { useAudioLevels } from "./useAudioLevels";
+import { FigureOps } from "../forge/FigureSvg";
 import { FRAME_H, FRAME_W, castFigures, computeFrame, gradeFilter, itemTransform, layerTransform } from "./sceneModel";
 
 export type StageSelection = { kind: "element"; index: number } | { kind: "cast"; index: number } | null;
@@ -150,12 +151,7 @@ export function StoryboardStage({
                   >
                     {selected && <rect x={60} y={20} width={280} height={470} fill="none" stroke="#ffb224" strokeWidth={4} strokeDasharray="14 10" />}
                     {interactive && <rect x={110} y={40} width={180} height={440} fill="transparent" />}
-                    {f.strokes.map((s, si) => (
-                      <line key={si} x1={s.x1} y1={s.y1} x2={s.x2} y2={s.y2} stroke={s.color} strokeWidth={s.width} strokeLinecap="round" />
-                    ))}
-                    {f.head.map((h, hi) => (
-                      <path key={hi} d={h.d} fill={h.fill} />
-                    ))}
+                    <FigureOps ops={f.ops} />
                   </g>
                 );
               })}

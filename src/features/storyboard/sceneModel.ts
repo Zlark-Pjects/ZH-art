@@ -1,5 +1,6 @@
 import type { CharacterLook, ElementSpec, Grade, RigClip, Scene } from "../../types";
-import { RIG_FLOOR, figureFor, headPaths, poseAt, type FigureStroke } from "../../project/rig";
+import { RIG_FLOOR, poseAt } from "../../project/rig";
+import { buildFigure, type DrawOp } from "../../project/forge/figure";
 
 /**
  * Pure description of one frame of a storyboard scene, shared by the live SVG
@@ -196,8 +197,7 @@ export interface PlacedFigure {
   y: number;
   scale: number;
   flip: boolean;
-  strokes: FigureStroke[];
-  head: { d: string; fill: string }[];
+  ops: DrawOp[];
 }
 
 /** Figures for every cast member of the scene, posed at time t. */
@@ -208,7 +208,7 @@ export function castFigures(scene: Scene, t: number, characters: CharacterLook[]
     const look = characters.find((c) => c.id === member.characterId);
     const clip = clips.find((c) => c.id === member.clipId);
     if (!look || !clip) continue;
-    const figure = figureFor(poseAt(clip, t), look);
+    const ops = buildFigure(poseAt(clip, t), look, t);
     const x = (member.x / 100) * FRAME_W;
     const y = (member.y / 100) * FRAME_H;
     // Rig height from head top (~50) to feet maps to `scale` of the frame height
@@ -220,8 +220,7 @@ export function castFigures(scene: Scene, t: number, characters: CharacterLook[]
       y,
       scale,
       flip,
-      strokes: figure.strokes,
-      head: headPaths(figure.head),
+      ops,
     });
   }
   return out;

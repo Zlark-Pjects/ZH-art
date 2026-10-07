@@ -58,6 +58,38 @@ export interface CharacterLook {
   costume: string;
   accent: string;
   hairStyle: "sleek" | "quantum" | "mech" | "ethereal";
+  /** Full body design from the Forge. Characters without one are drawn as a plain humanoid. */
+  build?: CharacterBuild;
+}
+
+/* ---------- Character forge ---------- */
+
+export type PartSlot = "torso" | "head" | "face" | "hair" | "headgear" | "arms" | "legs" | "back" | "tail" | "prop";
+
+export interface CharacterPalette {
+  skin: string;
+  primary: string;
+  secondary: string;
+  accent: string;
+  glow: string;
+  hair: string;
+}
+
+export interface CharacterProportions {
+  head: number; // 0.6-1.8
+  shoulders: number; // 0.7-1.5
+  arms: number; // 0.6-1.6
+  legs: number; // 0.5-1.6
+  bulk: number; // limb thickness 0.6-1.8
+}
+
+export interface CharacterBuild {
+  /** The seed this design came from; the same seed and archetype give the same character. */
+  seed: number;
+  archetype: string;
+  parts: Record<PartSlot, string>;
+  proportions: CharacterProportions;
+  palette: CharacterPalette;
 }
 
 export type MotionId = "idle" | "run" | "float" | "strike" | "wave";

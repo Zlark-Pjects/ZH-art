@@ -1,6 +1,7 @@
 import { synth } from "../../lib/synth";
 import type { CharacterLook, Grade, RigClip, Scene, Storyboard } from "../../types";
 import { RIG_FLOOR } from "../../project/rig";
+import { drawOps } from "../../project/forge/figure";
 import { FRAME_H, FRAME_W, castFigures, computeFrame, gradeFilter } from "../storyboard/sceneModel";
 
 export interface ExportOptions {
@@ -139,19 +140,7 @@ export function drawScene(
         ctx.translate(f.x, f.y);
         ctx.scale(f.flip ? -f.scale : f.scale, f.scale);
         ctx.translate(-200, -RIG_FLOOR);
-        ctx.lineCap = "round";
-        for (const st of f.strokes) {
-          ctx.strokeStyle = st.color;
-          ctx.lineWidth = st.width;
-          ctx.beginPath();
-          ctx.moveTo(st.x1, st.y1);
-          ctx.lineTo(st.x2, st.y2);
-          ctx.stroke();
-        }
-        for (const hp of f.head) {
-          ctx.fillStyle = hp.fill;
-          ctx.fill(new Path2D(hp.d));
-        }
+        drawOps(ctx, f.ops);
         ctx.restore();
       }
     }
