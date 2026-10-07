@@ -1,5 +1,7 @@
 import { synth } from "../../lib/synth";
-import type { CharacterLook, Grade, RigClip, Scene, Storyboard } from "../../types";
+import { playSong, stopSong } from "../../lib/music";
+import type { CharacterLook, Grade, RigClip, Scene, Storyboard, TextClip } from "../../types";
+import { TEXT_SIZES, TEXT_Y, locate, sceneStarts, textsAt, transitionAt, transitionLook } from "../timeline/timeline";
 import { RIG_FLOOR } from "../../project/rig";
 import { drawOps } from "../../project/forge/figure";
 import { FRAME_H, FRAME_W, castFigures, computeFrame, gradeFilter } from "../storyboard/sceneModel";
@@ -16,12 +18,20 @@ export interface ExportOptions {
   characters: CharacterLook[];
   clips: RigClip[];
   grade: Grade;
+  texts?: TextClip[];
+  titleCards?: boolean;
+  /** Play the generated score */
+  score: boolean;
+  /** The music track's song, decoded */
+  song: { buffer: AudioBuffer; offset: number; volume: number } | null;
 }
 
 export interface DrawExtras {
   characters: CharacterLook[];
   clips: RigClip[];
   grade: Grade;
+  texts?: TextClip[];
+  titleCards?: boolean;
 }
 
 export interface ExportResult {
@@ -178,6 +188,17 @@ export function drawScene(
   ctx.restore();
   ctx.filter = "none";
 
+  if (extras.titleCards !== false) drawTitleCard(ctx, scene);
+
+  if (fadeIn < 1) {
+    ctx.fillStyle = `rgba(0,0,0,${1 - fadeIn})`;
+    ctx.fillRect(0, 0, w, h);
+  }
+}
+
+/** The scene's title and narration, lower left, sized to the output frame. */
+function drawTitleCard(ctx: CanvasRenderingContext2D, scene: Scene) {
+  const { width: w, height: h } = ctx.canvas;
   // Title card, sized to the output frame
   const pad = w * 0.045;
   const shade = ctx.createLinearGradient(0, h * 0.45, 0, h);
@@ -212,11 +233,108 @@ export function drawScene(
   ctx.font = `${Math.max(11, base * 0.011)}px "Geist Mono", monospace`;
   ctx.fillStyle = "rgba(237,234,227,0.7)";
   ctx.fillText(`SCENE ${String(scene.sceneNumber).padStart(2, "0")}`, pad, y - titleSize * 0.04);
+}
 
-  if (fadeIn < 1) {
-    ctx.fillStyle = `rgba(0,0,0,${1 - fadeIn})`;
-    ctx.fillRect(0, 0, w, h);
+const TEXT_FONTS: Record<TextClip["font"], { font: (px: number) => string; lineHeight: number; upper: boolean }> = {
+  display: { font: (px) => `${px}px Anton, Impact, sans-serif`, lineHeight: 0.92, upper: true },
+  serif: { font: (px) => `italic ${px}px "Instrument Serif", Georgia, serif`, lineHeight: 1.05, upper: false },
+  sans: { font: (px) => `600 ${px}px Geist, system-ui, sans-serif`, lineHeight: 1.1, upper: false },
+};
+
+/** Text-track clips at film time `t`, matching the live TextLayer. */
+export function drawTexts(ctx: CanvasRenderingContext2D, texts: TextClip[] | undefined, t: number) {
+  const visible = textsAt(texts, t);
+  if (!visible.length) return;
+  const { width: w, height: h } = ctx.canvas;
+  // Sizes are fractions of a 16:9 frame's height; tall and square frames use their width
+  const frameH = Math.min(w, h * (16 / 9)) * (9 / 16);
+  for (const { clip, state } of visible) {
+    const spec = TEXT_FONTS[clip.font];
+    const px = TEXT_SIZES[clip.font][clip.size] * frameH;
+    ctx.save();
+    ctx.font = spec.font(px);
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    const full = spec.upper ? clip.text.toUpperCase() : clip.text;
+    const lines = full.split("\n").flatMap((para) => wrapLines(ctx, para, w * 0.86, 6));
+    const lh = px * spec.lineHeight;
+    const yc = (TEXT_Y[clip.position] + state.dy) * h;
+    ctx.globalAlpha = Math.max(0, Math.min(1, state.opacity));
+    ctx.translate(w / 2, yc);
+    ctx.scale(state.scale, state.scale);
+    const top = -((lines.length - 1) * lh) / 2;
+    if (clip.box) {
+      const widest = Math.max(...lines.map((l) => ctx.measureText(l).width));
+      const bw = widest + px;
+      const bh = lines.length * lh + px * 0.4;
+      ctx.fillStyle = "rgba(0,0,0,0.65)";
+      ctx.beginPath();
+      ctx.roundRect(-bw / 2, top - lh / 2 - px * 0.2, bw, bh, px * 0.12);
+      ctx.fill();
+    } else {
+      ctx.shadowColor = "rgba(0,0,0,0.65)";
+      ctx.shadowBlur = px * 0.25;
+      ctx.shadowOffsetY = px * 0.04;
+    }
+    ctx.fillStyle = "#edeae3";
+    let remaining = state.chars;
+    lines.forEach((line, k) => {
+      if (remaining <= 0) return;
+      const shown = line.slice(0, remaining);
+      remaining -= line.length + 1;
+      // Typewriter text grows from the left of its final, centred position
+      const x = shown.length < line.length ? -ctx.measureText(line).width / 2 + ctx.measureText(shown).width / 2 : 0;
+      ctx.fillText(shown, x, top + k * lh);
+    });
+    ctx.restore();
   }
+}
+
+/** One finished frame of the film at time `t`: scene, transition, text. */
+export function drawFilm(
+  ctx: CanvasRenderingContext2D,
+  scenes: Scene[],
+  t: number,
+  images: Record<number, HTMLImageElement | null>,
+  extras: DrawExtras,
+  scratch: HTMLCanvasElement,
+) {
+  const { index, local } = locate(scenes, t);
+  const { width: w, height: h } = ctx.canvas;
+  drawScene(ctx, scenes[index], local, images[index] ?? null, index === 0 ? Math.min(1, local / 0.4) : 1, extras);
+  const tr = transitionAt(scenes, index, local);
+  if (tr) {
+    const look = transitionLook(tr.kind, tr.progress);
+    if (look.prevOpacity > 0) {
+      if (scratch.width !== w || scratch.height !== h) {
+        scratch.width = w;
+        scratch.height = h;
+      }
+      const sctx = scratch.getContext("2d")!;
+      sctx.clearRect(0, 0, w, h);
+      // The outgoing scene leaves without its title card, so two titles never overlap
+      drawScene(sctx, scenes[tr.prevIndex], tr.prevLocal, images[tr.prevIndex] ?? null, 1, { ...extras, titleCards: false });
+      ctx.save();
+      ctx.globalAlpha = look.prevOpacity;
+      if (look.revealLeft > 0) {
+        ctx.beginPath();
+        ctx.rect(look.revealLeft * w, 0, w, h);
+        ctx.clip();
+      }
+      if (look.prevScale !== 1) {
+        ctx.translate(w / 2, h / 2);
+        ctx.scale(look.prevScale, look.prevScale);
+        ctx.translate(-w / 2, -h / 2);
+      }
+      ctx.drawImage(scratch, 0, 0);
+      ctx.restore();
+    }
+    if (look.flash > 0) {
+      ctx.fillStyle = `rgba(255,255,255,${look.flash})`;
+      ctx.fillRect(0, 0, w, h);
+    }
+  }
+  drawTexts(ctx, extras.texts, t);
 }
 
 /**
@@ -242,6 +360,7 @@ export async function recordStoryboard(
     document.fonts?.load(`64px Anton`),
     document.fonts?.load(`italic 24px "Instrument Serif"`),
     document.fonts?.load(`12px "Geist Mono"`),
+    document.fonts?.load(`600 24px Geist`),
   ]).catch(() => undefined);
 
   const images: Record<number, HTMLImageElement | null> = {};
@@ -251,19 +370,10 @@ export async function recordStoryboard(
     }),
   );
 
-  const starts: number[] = [];
-  let total = 0;
-  for (const s of board.scenes) {
-    starts.push(total);
-    total += s.duration;
-  }
-  const sceneAt = (t: number) => {
-    let i = board.scenes.length - 1;
-    while (i > 0 && starts[i] > t) i--;
-    return i;
-  };
+  const { total } = sceneStarts(board.scenes);
+  const scratch = document.createElement("canvas");
 
-  drawScene(ctx, board.scenes[0], 0, images[0] ?? null, 0, opts);
+  drawFilm(ctx, board.scenes, 0, images, opts, scratch);
   const stream = canvas.captureStream(opts.fps);
   if (opts.withAudio) {
     const audio = synth.getRecordingStream();
@@ -279,8 +389,9 @@ export async function recordStoryboard(
   recorder.ondataavailable = (e) => e.data.size > 0 && chunks.push(e.data);
   const stopped = new Promise<void>((resolve) => (recorder.onstop = () => resolve()));
 
-  if (opts.withAudio) synth.start(board.musicVibe, opts.scale, opts.bpm);
   recorder.start(1000);
+  if (opts.withAudio && opts.score) synth.start(board.musicVibe, opts.scale, opts.bpm);
+  if (opts.withAudio && opts.song) playSong(opts.song.buffer, opts.song.offset, opts.song.volume, { record: true, endIn: total });
   const startedAt = performance.now();
 
   await new Promise<void>((resolve, reject) => {
@@ -296,15 +407,16 @@ export async function recordStoryboard(
     const loop = () => {
       const t = (performance.now() - startedAt) / 1000;
       if (t >= total) return finish();
-      const i = sceneAt(t);
-      const local = t - starts[i];
-      drawScene(ctx, board.scenes[i], local, images[i] ?? null, Math.min(1, local / 0.4), opts);
+      drawFilm(ctx, board.scenes, t, images, opts, scratch);
       onProgress(t / total);
       frame = requestAnimationFrame(loop);
     };
     frame = requestAnimationFrame(loop);
   }).finally(() => {
-    if (opts.withAudio) synth.stop();
+    if (opts.withAudio) {
+      synth.stop();
+      stopSong();
+    }
     if (recorder.state !== "inactive") recorder.stop();
     stream.getVideoTracks().forEach((track) => track.stop());
   });

@@ -24,6 +24,7 @@ export function StoryboardStage({
   selection,
   onSelect,
   onMove,
+  titleCard = true,
 }: {
   scene: Scene;
   elapsed: number;
@@ -39,6 +40,8 @@ export function StoryboardStage({
   selection?: StageSelection;
   onSelect?: (sel: StageSelection) => void;
   onMove?: (sel: NonNullable<StageSelection>, x: number, y: number) => void;
+  /** Show the scene title and narration card */
+  titleCard?: boolean;
 }) {
   const levels = useAudioLevels(isPlaying && !thumbnail);
   const frame = computeFrame(scene, elapsed, levels);
@@ -171,7 +174,7 @@ export function StoryboardStage({
       </svg>
 
       {/* Title card: the scene title slammed lower-left, narration as a subtitle */}
-      {!thumbnail && (scene.title || scene.narration) && (
+      {!thumbnail && titleCard && (scene.title || scene.narration) && (
         <div
           key={scene.sceneNumber + scene.title}
           className="pointer-events-none absolute inset-x-0 bottom-[7%] bg-gradient-to-t from-black/75 via-black/35 to-transparent p-[4cqw] pb-[3.5cqw] pt-[8cqw]"

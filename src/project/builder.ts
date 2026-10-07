@@ -349,6 +349,8 @@ export function buildStoryboard(opts: BuildOptions): Storyboard {
       accentColor: palette.accent,
       gradientColors: gradient,
       cameraMotion: camera,
+      // Soft dissolves, with a harder cut into the climax
+      transition: i === 0 ? "cut" : beatIndex === 2 ? (opts.mood === "synthwave" || opts.mood === "chiptune" ? "flash" : "zoom") : "fade",
       elements,
       particles: {
         type: i === 0 ? motif.particle : r.next() > 0.3 ? motif.particle : palette.particle,

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { CharacterLook, Grade, Project, RigClip, Scene, Storyboard } from "../types";
+import type { CharacterLook, Grade, MusicTrack, Project, RigClip, Scene, Storyboard, TextClip } from "../types";
 import { buildStoryboard } from "./builder";
 import { DEFAULT_CHARACTER, DEFAULT_CLIP, GRADE_PRESETS } from "./rig";
 import {
@@ -70,8 +70,8 @@ export function useProject() {
 
   /* ----- load image assets referenced by scenes ----- */
   const assetIds = useMemo(
-    () => project.board.scenes.map((s) => s.backdrop).filter((id): id is string => Boolean(id)),
-    [project.board.scenes],
+    () => [...project.board.scenes.map((s) => s.backdrop), project.music?.assetId].filter((id): id is string => Boolean(id)),
+    [project.board.scenes, project.music?.assetId],
   );
   useEffect(() => {
     const missing = assetIds.filter((id) => !(id in assets));
@@ -178,6 +178,45 @@ export function useProject() {
   );
   const setGrade = useCallback((grade: Grade) => update((p) => ({ ...p, grade })), [update]);
 
+  /* ----- timeline: durations, text, music ----- */
+  const setDurations = useCallback(
+    (durations: number[]) =>
+      update((p) => ({ ...p, board: { ...p.board, scenes: p.board.scenes.map((s, i) => (durations[i] ? { ...s, duration: durations[i] } : s)) } })),
+    [update],
+  );
+  const upsertText = useCallback(
+    (t: TextClip) => update((p) => {
+      const texts = p.texts ?? [];
+      return { ...p, texts: texts.some((x) => x.id === t.id) ? texts.map((x) => (x.id === t.id ? t : x)) : [...texts, t] };
+    }),
+    [update],
+  );
+  const removeText = useCallback((id: string) => update((p) => ({ ...p, texts: (p.texts ?? []).filter((t) => t.id !== id) })), [update]);
+  const setTitleCards = useCallback((on: boolean) => update((p) => ({ ...p, titleCards: on })), [update]);
+
+  /** Store a song's audio and put it on the music track (replacing any previous song). */
+  const addMusic = useCallback(
+    async (dataUrl: string, track: Omit<MusicTrack, "assetId">) => {
+      const id = newId("song");
+      await putAsset(id, dataUrl);
+      setAssets((prev) => ({ ...prev, [id]: dataUrl }));
+      update((p) => {
+        if (p.music?.assetId) deleteAsset(p.music.assetId);
+        return { ...p, music: { ...track, assetId: id } };
+      });
+    },
+    [update],
+  );
+  const patchMusic = useCallback((patch: Partial<MusicTrack>) => update((p) => (p.music ? { ...p, music: { ...p.music, ...patch } } : p)), [update]);
+  const removeMusic = useCallback(
+    () =>
+      update((p) => {
+        if (p.music?.assetId) deleteAsset(p.music.assetId);
+        return { ...p, music: null };
+      }),
+    [update],
+  );
+
   /* ----- project management ----- */
   const open = useCallback((id: string) => {
     const p = loadProject(id);
@@ -195,16 +234,29 @@ export function useProject() {
     return p;
   }, []);
 
-  const duplicate = useCallback(() => {
+  const duplicate = useCallback(async () => {
     const copy: Project = { ...project, id: newId("proj"), board: { ...project.board, title: `${project.board.title} (copy)` }, createdAt: Date.now(), updatedAt: Date.now() };
+    // The copy gets its own song, so removing it from one project can't break the other
+    if (project.music) {
+      const data = assets[project.music.assetId] ?? (await getAsset(project.music.assetId));
+      if (data) {
+        const id = newId("song");
+        await putAsset(id, data);
+        setAssets((prev) => ({ ...prev, [id]: data }));
+        copy.music = { ...project.music, assetId: id };
+      } else {
+        copy.music = null;
+      }
+    }
     firstRender.current = true;
     setProject(copy);
-  }, [project]);
+  }, [project, assets]);
 
   const remove = useCallback(
     (id: string) => {
       const doomed = loadProject(id);
       doomed?.board.scenes.forEach((s) => s.backdrop && deleteAsset(s.backdrop));
+      if (doomed?.music?.assetId) deleteAsset(doomed.music.assetId);
       deleteProject(id);
       const remaining = listProjects();
       setProjects(remaining);
@@ -232,8 +284,16 @@ export function useProject() {
     const data = JSON.parse(await file.text());
     if (data?.format !== "zh-art-project" || !data.project?.board?.scenes) throw new Error("That isn't a ZH-art project file.");
     const imported: Project = { ...data.project, id: newId("proj"), updatedAt: Date.now() };
-    for (const [id, url] of Object.entries<string>(data.assets ?? {})) await putAsset(id, url);
-    setAssets((prev) => ({ ...prev, ...(data.assets ?? {}) }));
+    const files: Record<string, string> = { ...(data.assets ?? {}) };
+    // Songs get a fresh id so this copy and any original never share (and delete) one file
+    if (imported.music?.assetId && files[imported.music.assetId]) {
+      const id = newId("song");
+      files[id] = files[imported.music.assetId];
+      delete files[imported.music.assetId];
+      imported.music = { ...imported.music, assetId: id };
+    }
+    for (const [id, url] of Object.entries<string>(files)) await putAsset(id, url);
+    setAssets((prev) => ({ ...prev, ...files }));
     firstRender.current = true;
     setProject(imported);
   }, []);
@@ -257,6 +317,13 @@ export function useProject() {
     upsertClip,
     removeClip,
     setGrade,
+    setDurations,
+    upsertText,
+    removeText,
+    setTitleCards,
+    addMusic,
+    patchMusic,
+    removeMusic,
     open,
     create,
     duplicate,

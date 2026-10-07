@@ -44,6 +44,44 @@ export interface Scene {
   backdrop?: string;
   /** Characters performing in this scene */
   cast?: CastMember[];
+  /** How this scene arrives from the one before it; missing means a straight cut */
+  transition?: TransitionKind;
+}
+
+export type TransitionKind = "cut" | "fade" | "wipe" | "zoom" | "flash";
+
+/** A line of text on the timeline's text track. */
+export interface TextClip {
+  id: string;
+  text: string;
+  /** Seconds from the start of the film */
+  start: number;
+  duration: number;
+  animation: "fade" | "pop" | "slide" | "typewriter";
+  font: "display" | "serif" | "sans";
+  position: "top" | "middle" | "bottom";
+  size: "s" | "m" | "l";
+  /** Dark box behind the text, for captions */
+  box: boolean;
+}
+
+/** A song the user added. The audio itself lives in the asset store. */
+export interface MusicTrack {
+  assetId: string;
+  name: string;
+  /** Length of the song, seconds */
+  duration: number;
+  /** Seconds into the song where the film starts */
+  offset: number;
+  volume: number; // 0-1
+  /** Detected tempo */
+  bpm: number;
+  /** Detected beat times, seconds into the song */
+  beats: number[];
+  /** Waveform overview, 0-1 per bucket */
+  peaks: number[];
+  /** Keep the generated score playing under the song */
+  withScore: boolean;
 }
 
 /* ---------- Studio project ---------- */
@@ -140,6 +178,12 @@ export interface Project {
   characters: CharacterLook[];
   clips: RigClip[];
   grade: Grade;
+  /** Text track */
+  texts?: TextClip[];
+  /** Music track */
+  music?: MusicTrack | null;
+  /** Show each scene's title and narration as a title card (default on) */
+  titleCards?: boolean;
   createdAt: number;
   updatedAt: number;
 }

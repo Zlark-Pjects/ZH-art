@@ -14,6 +14,7 @@ class SynthEngine {
   private arpGain: GainNode | null = null;
   private drumGain: GainNode | null = null;
   private recordDestination: MediaStreamAudioDestinationNode | null = null;
+  private recordTap: GainNode | null = null;
 
   // Music parameters
   private bpm = 100;
@@ -127,14 +128,27 @@ class SynthEngine {
     return this.analyser;
   }
 
+  /** The shared audio context (created on first use). */
+  public getContext(): AudioContext | null {
+    this.init();
+    if (this.ctx && this.ctx.state === "suspended") this.ctx.resume();
+    return this.ctx;
+  }
+
+  /** Node other sources (a song) connect to so they're heard, metered and muted with the score. */
+  public getOutput(): AudioNode | null {
+    this.init();
+    return this.masterGain;
+  }
+
   /**
-   * Audio stream for recording exports. It taps the instrument submixes
-   * directly, so the recording has sound even while playback is muted.
+   * Node feeding the export recording. It sits before the mute, so the
+   * recording has sound even while playback is muted.
    */
-  public getRecordingStream(): MediaStream | null {
+  public getRecordInput(): AudioNode | null {
     this.init();
     if (!this.ctx || !this.bassGain || !this.padGain || !this.arpGain || !this.drumGain) return null;
-    if (!this.recordDestination) {
+    if (!this.recordTap) {
       const tap = this.ctx.createGain();
       tap.gain.value = 0.45;
       this.bassGain.connect(tap);
@@ -143,8 +157,15 @@ class SynthEngine {
       this.drumGain.connect(tap);
       this.recordDestination = this.ctx.createMediaStreamDestination();
       tap.connect(this.recordDestination);
+      this.recordTap = tap;
     }
-    return this.recordDestination.stream;
+    return this.recordDestination;
+  }
+
+  /** Audio stream for recording exports: the score plus anything connected to getRecordInput(). */
+  public getRecordingStream(): MediaStream | null {
+    this.getRecordInput();
+    return this.recordDestination?.stream ?? null;
   }
 
   public updateBpm(bpm: number) {

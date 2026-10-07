@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Download, Square, Video } from "lucide-react";
-import type { Storyboard } from "../../types";
+import type { Studio } from "../useStudio";
 import { Button, Field, Notice, Progress, Section, Segmented } from "../../ui";
 import { saveFile } from "../../lib/saveFile";
-import { recordStoryboard, supportedRecordingType, type DrawExtras } from "./recordStoryboard";
+import { recordStoryboard, supportedRecordingType } from "./recordStoryboard";
 
 const RESOLUTIONS = {
   "720p": { width: 1280, height: 720, label: "720p" },
@@ -18,21 +18,10 @@ function formatBytes(bytes: number) {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-export function ExportPanel({
-  storyboard,
-  backdrops,
-  bpm,
-  scale,
-  stopPlayback,
-  extras,
-}: {
-  storyboard: Storyboard;
-  backdrops: Record<number, string>;
-  bpm: number;
-  scale: string;
-  stopPlayback: () => void;
-  extras: DrawExtras;
-}) {
+export function ExportPanel({ studio }: { studio: Studio }) {
+  const storyboard = studio.board;
+  const { backdrops, project, playback } = studio;
+  const music = project.music ?? null;
   const format = useMemo(supportedRecordingType, []);
   const [resolution, setResolution] = useState<ResolutionKey>("1080p");
   const [fps, setFps] = useState<"24" | "30" | "60">("30");
@@ -55,7 +44,7 @@ export function ExportPanel({
 
   const start = async () => {
     if (!canvasRef.current) return;
-    stopPlayback();
+    playback.stop();
     setError("");
     setResult(null);
     setProgress(0);
@@ -66,7 +55,23 @@ export function ExportPanel({
       const out = await recordStoryboard(
         storyboard,
         canvasRef.current,
-        { width, height, fps: Number(fps), bitrateMbps: bitrate, withAudio, bpm, scale, backdrops, ...extras },
+        {
+          width,
+          height,
+          fps: Number(fps),
+          bitrateMbps: bitrate,
+          withAudio,
+          bpm: playback.bpm,
+          scale: playback.scale,
+          backdrops,
+          characters: project.characters,
+          clips: project.clips,
+          grade: project.grade,
+          texts: project.texts,
+          titleCards: project.titleCards ?? true,
+          score: !music || music.withScore,
+          song: music && studio.songBuffer ? { buffer: studio.songBuffer, offset: music.offset, volume: music.volume } : null,
+        },
         setProgress,
         controller.signal,
       );
@@ -139,7 +144,7 @@ export function ExportPanel({
         </Section>
         <Section index="02" title="Sound">
           <label className="flex items-center justify-between gap-4 text-[14px] text-fg">
-            Include the score
+            {music ? (music.withScore ? "Include the song and score" : "Include the song") : "Include the score"}
             <input type="checkbox" checked={withAudio} onChange={(e) => setWithAudio(e.target.checked)} className="h-4 w-4 accent-[var(--color-accent)]" />
           </label>
         </Section>

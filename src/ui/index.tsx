@@ -43,12 +43,11 @@ export function StudioLayout({ stage, rail, below }: { stage: ReactNode; rail: R
     <div className="grid grid-cols-1 gap-x-10 xl:grid-cols-[minmax(0,1fr)_380px]">
       <div className="min-w-0 xl:sticky xl:top-[124px] xl:self-start">
         {stage}
-        {below && <div className="mt-10 hidden xl:block">{below}</div>}
+        {below && <div className="mt-4 xl:mt-6">{below}</div>}
       </div>
       <aside className="mt-8 min-w-0 xl:mt-0" aria-label="Controls">
         {rail}
       </aside>
-      {below && <div className="mt-4 xl:hidden">{below}</div>}
     </div>
   );
 }

@@ -3,6 +3,8 @@ import type { MusicPreset, Storyboard, VisualPreset } from "../types";
 import { STYLE_PALETTES, applyPalette, buildStoryboard } from "../project/builder";
 import { useProject } from "../project/useProject";
 import { usePlayback } from "./storyboard/usePlayback";
+import { loadSong } from "../lib/music";
+import { sampleBoard, type SampleFilm } from "../project/samples";
 
 /**
  * The whole studio: the shared project (autosaved), playback, and the
@@ -10,8 +12,30 @@ import { usePlayback } from "./storyboard/usePlayback";
  */
 export function useStudio() {
   const project = useProject();
-  const { board } = project.project;
-  const playback = usePlayback(board);
+  const { board, music } = project.project;
+
+  // Decode the music track's song once its audio has loaded from storage
+  const [song, setSong] = useState<{ assetId: string; buffer: AudioBuffer } | null>(null);
+  const [songError, setSongError] = useState("");
+  const songData = music ? project.assets[music.assetId] : undefined;
+  useEffect(() => {
+    if (!music || !songData) return;
+    if (song?.assetId === music.assetId) return;
+    let cancelled = false;
+    setSongError("");
+    loadSong(music.assetId, songData)
+      .then((buffer) => !cancelled && setSong({ assetId: music.assetId, buffer }))
+      .catch(() => !cancelled && setSongError("This browser couldn't play the song on the music track."));
+    return () => {
+      cancelled = true;
+    };
+  }, [music?.assetId, songData, song?.assetId]);
+  const songBuffer = music && song?.assetId === music.assetId ? song.buffer : null;
+
+  const playback = usePlayback(board, {
+    score: !music || music.withScore,
+    song: music && songBuffer ? { buffer: songBuffer, offset: music.offset, volume: music.volume } : null,
+  });
 
   // Builder settings (inputs for "Build storyboard")
   const [style, setStyle] = useState<VisualPreset>((board.visualStyle as VisualPreset) || "cinema");
@@ -56,6 +80,20 @@ export function useStudio() {
     setCanUndo(false);
   }, [project.setBoard, playback.load]);
 
+  /** Replace the scenes with a hand-made sample film (undoable). */
+  const openSample = useCallback(
+    (film: SampleFilm) => {
+      const next = sampleBoard(film);
+      undoRef.current = board;
+      setCanUndo(true);
+      setStyle(film.visualStyle);
+      project.setPrompt(film.prompt);
+      project.setBoard(next);
+      playback.load(next);
+    },
+    [board, project.setBoard, project.setPrompt, playback.load],
+  );
+
   /** Recolour the current scenes with the selected style's palette, keeping everything else. */
   const applyStyle = useCallback(() => {
     undoRef.current = board;
@@ -85,7 +123,10 @@ export function useStudio() {
     undoBuild,
     canUndo,
     applyStyle,
+    openSample,
     backdrops,
+    songBuffer,
+    songError,
   };
 }
 

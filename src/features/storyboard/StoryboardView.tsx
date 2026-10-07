@@ -1,15 +1,19 @@
 import { useEffect, useState } from "react";
-import { Copy, Dices, Pause, Play, Plus, Trash2, Undo2, Volume2, VolumeX, Wand2 } from "lucide-react";
+import { Dices, Pause, Play, Undo2, Volume2, VolumeX, Wand2 } from "lucide-react";
 import type { Studio } from "../useStudio";
-import { MUSIC_PRESETS, SCALES, VISUAL_PRESETS, type ScaleName } from "../../lib/presets";
-import { blankScene } from "../../project/builder";
-import { Button, Field, IconButton, RailTabs, Section, Segmented, StudioLayout, cx, inputClass } from "../../ui";
+import { VISUAL_PRESETS } from "../../lib/presets";
+import { SAMPLE_FILMS } from "../../project/samples";
+import { Button, RailTabs, Section, Segmented, StudioLayout, cx } from "../../ui";
 import { FilmGate } from "../../ui/FilmGate";
 import { StoryboardStage, type StageSelection } from "./StoryboardStage";
 import { SceneInspector } from "./SceneInspector";
-import { Spectrum } from "./Spectrum";
+import { Timeline } from "../timeline/Timeline";
+import { TextLayer } from "../timeline/TextLayer";
+import { TextPanel } from "../timeline/TextPanel";
+import { SoundPanel } from "../timeline/SoundPanel";
+import { transitionAt, transitionLook } from "../timeline/timeline";
 
-type RailTab = "build" | "scene" | "score";
+type RailTab = "build" | "scene" | "text" | "sound";
 
 function GateButton({ label, onClick, children, active }: { label: string; onClick: () => void; children: React.ReactNode; active?: boolean }) {
   return (
@@ -32,8 +36,13 @@ export function StoryboardView({ studio, onNavigate }: { studio: Studio; onNavig
   const { board, playback, project } = studio;
   const [tab, setTab] = useState<RailTab>("build");
   const [selection, setSelection] = useState<StageSelection>(null);
+  const [selectedText, setSelectedText] = useState<string | null>(null);
   const scene = board.scenes[playback.sceneIndex];
   const layout = tab === "scene" && !playback.isPlaying;
+  const titleCards = project.titleCards ?? true;
+  const trans = layout ? null : transitionAt(board.scenes, playback.sceneIndex, playback.elapsed);
+  const look = trans ? transitionLook(trans.kind, trans.progress) : null;
+  const prev = trans ? board.scenes[trans.prevIndex] : null;
 
   // Selection belongs to one scene
   useEffect(() => setSelection(null), [playback.sceneIndex]);
@@ -76,6 +85,7 @@ export function StoryboardView({ studio, onNavigate }: { studio: Studio; onNavig
           grade={project.grade}
           layout={layout}
           selection={selection}
+          titleCard={titleCards}
           onSelect={(sel) => {
             setSelection(sel);
             if (sel) setTab("scene");
@@ -83,6 +93,29 @@ export function StoryboardView({ studio, onNavigate }: { studio: Studio; onNavig
           onMove={moveSelected}
         />
       )}
+      {trans && look && prev && look.prevOpacity > 0 && (
+        <div
+          className="pointer-events-none absolute inset-0"
+          style={{
+            opacity: look.prevOpacity,
+            transform: look.prevScale !== 1 ? `scale(${look.prevScale})` : undefined,
+            clipPath: look.revealLeft > 0 ? `inset(0 0 0 ${look.revealLeft * 100}%)` : undefined,
+          }}
+        >
+          <StoryboardStage
+            scene={prev}
+            elapsed={trans.prevLocal}
+            isPlaying={false}
+            backdropUrl={studio.backdrops[trans.prevIndex]}
+            characters={project.characters}
+            clips={project.clips}
+            grade={project.grade}
+            titleCard={false}
+          />
+        </div>
+      )}
+      {look && look.flash > 0 && <div className="pointer-events-none absolute inset-0 bg-white" style={{ opacity: look.flash }} />}
+      {!layout && <TextLayer texts={project.texts} time={playback.sequenceElapsed} selectedId={tab === "text" ? selectedText : null} />}
     </FilmGate>
   );
 
@@ -94,25 +127,30 @@ export function StoryboardView({ studio, onNavigate }: { studio: Studio; onNavig
         tabs={[
           { value: "build", label: "Build" },
           { value: "scene", label: "Scene" },
-          { value: "score", label: "Score" },
+          { value: "text", label: "Text" },
+          { value: "sound", label: "Sound" },
         ]}
       />
       {tab === "build" && <BuildPanel studio={studio} />}
       {tab === "scene" && <SceneInspector studio={studio} selection={selection} setSelection={setSelection} onNavigate={onNavigate} />}
-      {tab === "score" && <ScorePanel studio={studio} />}
+      {tab === "text" && <TextPanel studio={studio} selected={selectedText} onSelect={setSelectedText} />}
+      {tab === "sound" && <SoundPanel studio={studio} />}
     </div>
   );
 
   return (
     <StudioLayout
-      stage={stage}
+      stage={<div className="xl:mx-auto xl:max-w-[calc((100vh-400px)*1.7778)]">{stage}</div>}
       rail={rail}
       below={
-        <Filmstrip
+        <Timeline
           studio={studio}
-          onEdit={() => {
-            setTab("scene");
+          selectedText={selectedText}
+          onSelectText={(id) => {
+            setSelectedText(id);
+            if (id) setTab("text");
           }}
+          onEditScene={() => setTab("scene")}
         />
       }
     />
@@ -175,134 +213,26 @@ function BuildPanel({ studio }: { studio: Studio }) {
             Undo
           </Button>
         </div>
-        <p className="text-xs leading-relaxed text-faint">Building replaces the scenes. Characters, clips and the grade are kept.</p>
+        <p className="text-xs leading-relaxed text-faint">Building replaces the scenes. Characters, clips, text, music and the grade are kept.</p>
       </div>
-    </div>
-  );
-}
 
-function ScorePanel({ studio }: { studio: Studio }) {
-  const { playback } = studio;
-  return (
-    <div>
-      <Section index="01" title="Score" aside="Web Audio">
-        <div className="flex flex-col gap-5">
-          <Segmented
-            label="Mood"
-            value={studio.mood}
-            onChange={studio.setMood}
-            columns={3}
-            options={MUSIC_PRESETS.map((p) => ({ value: p.id, label: p.name, hint: p.desc }))}
-          />
-          <Spectrum active={playback.isPlaying} />
-          <div className="grid grid-cols-2 gap-4">
-            <Field label="Tempo" hint={`${playback.bpm} bpm`} htmlFor="sb-bpm">
-              <input
-                id="sb-bpm"
-                type="range"
-                min={60}
-                max={160}
-                value={playback.bpm}
-                onChange={(e) => {
-                  playback.setBpm(Number(e.target.value));
-                  studio.patchBoard({ tempoBpm: Number(e.target.value) });
-                }}
-                className="mt-2 w-full"
-              />
-            </Field>
-            <Field label="Scale" htmlFor="sb-scale">
-              <select
-                id="sb-scale"
-                value={playback.scale}
-                onChange={(e) => {
-                  playback.setScale(e.target.value as ScaleName);
-                  studio.patchBoard({ scale: e.target.value as ScaleName });
-                }}
-                className={inputClass}
-              >
-                {SCALES.map((s) => (
-                  <option key={s.value} value={s.value}>
-                    {s.label}
-                  </option>
-                ))}
-              </select>
-            </Field>
-          </div>
-          <p className="text-xs leading-relaxed text-faint">Saved with the project and used for the exported video.</p>
-        </div>
-      </Section>
-    </div>
-  );
-}
-
-function Filmstrip({ studio, onEdit }: { studio: Studio; onEdit: () => void }) {
-  const { board, playback, project } = studio;
-  const i = playback.sceneIndex;
-  return (
-    <div>
-      <div className="mb-4 flex items-baseline justify-between gap-4">
-        <h2 className="eyebrow text-fg">Sequence</h2>
-        <div className="flex items-center gap-1">
-          <span className="eyebrow mr-2">
-            {board.scenes.length} scenes · {playback.sequenceDuration.toFixed(1)}s
-          </span>
-          <IconButton label="Duplicate this scene" onClick={() => studio.insertScene(i + 1, { ...board.scenes[i] })}>
-            <Copy className="h-4 w-4" />
-          </IconButton>
-          <IconButton label="Delete this scene" onClick={() => studio.removeScene(i)} disabled={board.scenes.length <= 1}>
-            <Trash2 className="h-4 w-4" />
-          </IconButton>
-        </div>
-      </div>
-      <ol className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        {board.scenes.map((s, k) => {
-          const active = k === i;
-          return (
-            <li key={`${s.sceneNumber}-${k}`}>
+      <Section index="04" title="Or start from a sample">
+        <ul className="flex flex-col gap-1.5">
+          {SAMPLE_FILMS.map((film) => (
+            <li key={film.id}>
               <button
                 type="button"
-                onClick={() => (active ? onEdit() : playback.setSceneIndex(k))}
-                aria-current={active ? "step" : undefined}
-                className="group block w-full text-left"
+                onClick={() => studio.openSample(film)}
+                className="w-full rounded-[3px] border border-line px-3 py-2.5 text-left transition-colors hover:border-line-strong"
               >
-                <div className={cx("relative aspect-video overflow-hidden ring-1 transition-shadow duration-300", active ? "ring-fg/70" : "ring-line group-hover:ring-line-strong")}>
-                  <StoryboardStage
-                    scene={s}
-                    elapsed={s.duration * 0.6}
-                    isPlaying={false}
-                    backdropUrl={studio.backdrops[k]}
-                    characters={project.characters}
-                    clips={project.clips}
-                    grade={project.grade}
-                    thumbnail
-                  />
-                  <span className={cx("absolute inset-x-0 top-0 h-[2px] origin-left bg-accent transition-transform duration-500", active ? "scale-x-100" : "scale-x-0")} />
-                  <span className="absolute left-2 top-2 font-mono text-[11px] text-fg/90 [text-shadow:0_1px_2px_#000]">{String(k + 1).padStart(2, "0")}</span>
-                  <span className="absolute bottom-2 right-2 font-mono text-[11px] text-fg/90 [text-shadow:0_1px_2px_#000]">{s.duration.toFixed(1)}s</span>
-                </div>
-                <p className={cx("mt-2 truncate font-display text-lg uppercase leading-none tracking-[0.01em] transition-colors", active ? "text-fg" : "text-muted group-hover:text-fg")}>
-                  {s.title || "Untitled"}
-                </p>
-                <p className="eyebrow mt-1.5 text-faint">{active ? "Click to edit" : s.cameraMotion.type.replace("-", " ")}</p>
+                <span className="block text-[14px] text-fg">{film.name}</span>
+                <span className="mt-0.5 block truncate text-xs text-faint">{film.description}</span>
               </button>
             </li>
-          );
-        })}
-        <li>
-          <button
-            type="button"
-            onClick={() => {
-              studio.insertScene(board.scenes.length, blankScene(board, board.scenes.length + 1));
-              playback.setSceneIndex(board.scenes.length);
-              onEdit();
-            }}
-            className="flex aspect-video w-full flex-col items-center justify-center gap-2 border border-dashed border-line-strong text-muted transition-colors hover:border-fg/50 hover:text-fg"
-          >
-            <Plus className="h-5 w-5" />
-            <span className="text-[13px]">Add scene</span>
-          </button>
-        </li>
-      </ol>
+          ))}
+        </ul>
+        <p className="mt-3 text-xs text-faint">Replaces the scenes; Undo brings yours back.</p>
+      </Section>
     </div>
   );
 }

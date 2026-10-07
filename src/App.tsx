@@ -9,14 +9,14 @@ import { Leader } from "./features/Leader";
 
 const CharactersView = lazy(() => import("./features/forge/CharactersView").then((m) => ({ default: m.CharactersView })));
 const RiggingMoCap = lazy(() => import("./components/RiggingMoCap"));
-const ProductivityStudio = lazy(() => import("./components/ProductivityStudio"));
+const ExportPanel = lazy(() => import("./features/export/ExportPanel").then((m) => ({ default: m.ExportPanel })));
 
 const VIEWS = [
   { id: "storyboard", label: "Storyboard" },
   { id: "looks", label: "Looks" },
   { id: "characters", label: "Characters" },
-  { id: "rig", label: "Motion rig" },
-  { id: "edit", label: "Edit & export" },
+  { id: "rig", label: "Motion" },
+  { id: "export", label: "Export" },
 ] as const;
 
 type ViewId = (typeof VIEWS)[number]["id"];
@@ -113,27 +113,7 @@ export default function App() {
             "rig",
             <RiggingMoCap characters={studio.project.characters} clips={studio.project.clips} onSaveClip={studio.upsertClip} onDeleteClip={studio.removeClip} />,
           )}
-          {panel(
-            "edit",
-            <ProductivityStudio
-              storyboard={studio.board}
-              setStoryboard={studio.setBoard}
-              activeSceneIndex={studio.playback.sceneIndex}
-              setActiveSceneIndex={studio.playback.setSceneIndex}
-              setSelectedStyle={studio.setStyle}
-              setSelectedMusic={studio.setMood}
-              setPrompt={studio.setPrompt}
-              loadStoryboard={(board) => {
-                studio.setBoard(board);
-                studio.playback.load(board);
-              }}
-              backdrops={studio.backdrops}
-              bpm={studio.playback.bpm}
-              scale={studio.playback.scale}
-              stopPlayback={studio.playback.stop}
-              exportExtras={{ characters: studio.project.characters, clips: studio.project.clips, grade: studio.project.grade }}
-            />,
-          )}
+          {panel("export", <ExportPanel studio={studio} />)}
         </Suspense>
       </main>
 
@@ -159,11 +139,12 @@ function Guide({ onClose }: { onClose: () => void }) {
   }, [onClose]);
 
   const items = [
-    ["Storyboard", "Write an idea and build: the composer reads places and things in it and lays out scenes, colours, camera moves and a score. Then edit anything — words, timing, palette, camera, shapes (drag them on the picture), particles, a backdrop photo, and cast."],
+    ["Storyboard", "Write an idea and build, or open a sample film: the composer lays out scenes, colours, camera moves and a score. Then edit anything — words, palette, camera, shapes (drag them on the picture), particles, a backdrop photo, and cast."],
+    ["Timeline", "Under the picture: drag scenes to reorder, drag their edges to trim, split at the playhead, and pick a transition between any two scenes. Add titles and captions on the text track. Add your own song on the music track; ZH-art finds its beat, so cuts snap to it, or press Cut on beat to line every cut up at once."],
     ["Looks", "A library of colour and atmosphere. Preview one on the current scene, then apply it to every scene at once."],
     ["Characters", "Forge whole characters from parts — bodies, heads, eyes, wings, tails, props — on two legs, four legs, wings, a serpent's coil or floating — or let the generator surprise you: pick an archetype, mutate, breed two designs, and lock what you like. Export any character as a game sprite sheet with idle, walk, run, jump and attack loops. The portrait studio handles faces and the film's colour grade."],
     ["Motion rig", "Pose a skeleton, layer a motion like a run or a float, record keyframes, or act it out on your webcam — motion capture runs on your device and the video never leaves the browser. Save the result as a clip to cast in any scene."],
-    ["Edit & export", "Reorder scenes, start from templates, and record the finished film with its score to a video file."],
+    ["Export", "Record the finished film, with its transitions, text, song and score, to a video file — widescreen, vertical 9:16 or square."],
   ];
 
 

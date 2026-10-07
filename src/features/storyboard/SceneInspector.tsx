@@ -4,6 +4,7 @@ import type { CameraMotion, CastMember, ElementSpec, ParticleSpec, Scene } from 
 import type { Studio } from "../useStudio";
 import { Button, ColorField, Field, IconButton, Notice, Section, Segmented, Slider, cx, inputClass } from "../../ui";
 import type { StageSelection } from "./StoryboardStage";
+import { TRANSITIONS } from "../timeline/timeline";
 
 export const CAMERA_PRESETS: Record<CameraMotion["type"], { label: string; motion: Omit<CameraMotion, "type" | "speed"> }> = {
   "zoom-in": { label: "Push in", motion: { scaleStart: 1, scaleEnd: 1.18, xStart: 0, xEnd: 0, yStart: 0, yEnd: 0 } },
@@ -88,7 +89,16 @@ export function SceneInspector({
           <Field label="Narration" htmlFor="sc-narr" hint="Shown as the subtitle">
             <textarea id="sc-narr" value={scene.narration} onChange={(e) => set({ narration: e.target.value })} rows={3} className={cx(inputClass, "resize-none font-serif text-[16px] italic")} />
           </Field>
-          <Slider label="Duration" value={scene.duration} min={2} max={12} step={0.5} onChange={(v) => set({ duration: v })} format={(v) => `${v.toFixed(1)}s`} />
+          <Slider label="Duration" value={scene.duration} min={1} max={20} step={0.1} onChange={(v) => set({ duration: Math.round(v * 10) / 10 })} format={(v) => `${v.toFixed(1)}s`} />
+          {index > 0 && (
+            <Segmented
+              label="Arrives with"
+              value={scene.transition ?? "cut"}
+              onChange={(transition) => set({ transition })}
+              columns={5}
+              options={TRANSITIONS.map((t) => ({ value: t.id, label: t.label, hint: t.hint }))}
+            />
+          )}
         </div>
       </Section>
 
