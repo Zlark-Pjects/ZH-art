@@ -11,6 +11,17 @@ export default defineConfig(() => {
         '@': path.resolve(__dirname, '.'),
       },
     },
+    build: {
+      rollupOptions: {
+        output: {
+          // React and the icon set change rarely: their own chunk caches across app updates
+          manualChunks(id: string) {
+            if (/node_modules\/(react|react-dom|scheduler)\//.test(id)) return 'react';
+            if (id.includes('node_modules/lucide-react')) return 'icons';
+          },
+        },
+      },
+    },
     server: {
       // HMR is disabled in AI Studio via DISABLE_HMR env var.
       // Do not modifyâfile watching is disabled to prevent flickering during agent edits.

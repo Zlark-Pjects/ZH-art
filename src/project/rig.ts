@@ -1,4 +1,4 @@
-import type { CharacterLook, Grade, MotionId, RigClip } from "../types";
+import type { CharacterLook, Easing, Grade, MotionId, RigClip } from "../types";
 
 /* ---------- Skeleton ---------- */
 
@@ -127,25 +127,89 @@ export function motionOffset(motion: MotionId, id: string, base: { x: number; y:
 /** Motion clock: the rig preview advanced 0.05 * speed per frame at ~60 fps. */
 export const motionTime = (seconds: number, speed: number) => seconds * 3 * speed;
 
+export const EASINGS: { id: Easing; label: string; hint: string }[] = [
+  { id: "smooth", label: "Smooth", hint: "Eases out of one key and into the next" },
+  { id: "linear", label: "Linear", hint: "Constant speed" },
+  { id: "in", label: "Ease in", hint: "Starts slow, arrives fast" },
+  { id: "out", label: "Ease out", hint: "Starts fast, settles in" },
+  { id: "back", label: "Overshoot", hint: "Swings past the next pose and settles back" },
+  { id: "bounce", label: "Bounce", hint: "Lands and bounces into the next pose" },
+  { id: "hold", label: "Hold", hint: "Holds still, then snaps to the next pose" },
+];
+
+/** Shape an interpolation fraction 0-1. */
+export function ease(kind: Easing, k: number): number {
+  const p = Math.max(0, Math.min(1, k));
+  switch (kind) {
+    case "hold":
+      return 0;
+    case "linear":
+      return p;
+    case "in":
+      return p * p * p;
+    case "out":
+      return 1 - Math.pow(1 - p, 3);
+    case "back": {
+      const c = 1.70158;
+      return 1 + (c + 1) * Math.pow(p - 1, 3) + c * Math.pow(p - 1, 2);
+    }
+    case "bounce": {
+      const n = 7.5625;
+      const d = 2.75;
+      if (p < 1 / d) return n * p * p;
+      if (p < 2 / d) return n * (p - 1.5 / d) ** 2 + 0.75;
+      if (p < 2.5 / d) return n * (p - 2.25 / d) ** 2 + 0.9375;
+      return n * (p - 2.625 / d) ** 2 + 0.984375;
+    }
+    default:
+      return p * p * (3 - 2 * p);
+  }
+}
+
+/** Key times for a clip (older clips space keys evenly). */
+export function keyTimesOf(clip: Pick<RigClip, "keyframes" | "keyframeSeconds" | "keyTimes">): number[] {
+  if (clip.keyTimes && clip.keyTimes.length === clip.keyframes.length) return clip.keyTimes;
+  const span = Math.max(0.05, clip.keyframeSeconds);
+  return clip.keyframes.map((_, i) => i * span);
+}
+
+/** Loop length of a clip's keyframes, seconds. */
+export function clipLength(clip: Pick<RigClip, "keyframes" | "keyframeSeconds" | "keyTimes" | "length">): number {
+  const times = keyTimesOf(clip);
+  const last = times.length ? times[times.length - 1] : 0;
+  return Math.max(last + 0.05, clip.length ?? last + Math.max(0.05, clip.keyframeSeconds));
+}
+
+/** Interpolated keyframe pose at `seconds` (looping), or null without keys. */
+export function keyedPose(clip: RigClip, seconds: number): Pose | null {
+  const frames = clip.keyframes;
+  if (!frames.length) return null;
+  if (frames.length === 1) return { ...clip.pose, ...frames[0] };
+  const times = keyTimesOf(clip);
+  const length = clipLength(clip);
+  const t = ((seconds % length) + length) % length;
+  // The key at or before t; before the first key we're still travelling from the last one
+  let k = frames.length - 1;
+  for (let i = 0; i < times.length; i++) if (times[i] <= t) k = i;
+  const next = (k + 1) % frames.length;
+  const from = times[k] > t ? times[k] - length : times[k];
+  const to = next === 0 ? times[0] + length : times[next];
+  const span = Math.max(1e-6, to - from);
+  const e = ease(clip.keyEasing?.[k] ?? "smooth", (t - from) / span);
+  const a = frames[k];
+  const b = frames[next];
+  return Object.fromEntries(
+    Object.keys(clip.pose).map((id) => {
+      const pa = a[id] ?? clip.pose[id];
+      const pb = b[id] ?? clip.pose[id];
+      return [id, { x: pa.x + (pb.x - pa.x) * e, y: pa.y + (pb.y - pa.y) * e }];
+    }),
+  );
+}
+
 /** Pose of a clip at `seconds`: keyframes (if any) interpolated, plus the procedural motion. */
 export function poseAt(clip: RigClip, seconds: number): Pose {
-  let base: Pose = clip.pose;
-  const frames = clip.keyframes;
-  if (frames.length > 0) {
-    const span = Math.max(0.2, clip.keyframeSeconds);
-    const pos = (seconds / span) % frames.length;
-    const a = frames[Math.floor(pos)];
-    const b = frames[(Math.floor(pos) + 1) % frames.length];
-    const k = pos - Math.floor(pos);
-    const e = k * k * (3 - 2 * k);
-    base = Object.fromEntries(
-      Object.keys(clip.pose).map((id) => {
-        const pa = a[id] ?? clip.pose[id];
-        const pb = b[id] ?? clip.pose[id];
-        return [id, { x: pa.x + (pb.x - pa.x) * e, y: pa.y + (pb.y - pa.y) * e }];
-      }),
-    );
-  }
+  const base: Pose = keyedPose(clip, seconds) ?? clip.pose;
   if (!clip.motion) return base;
   const t = motionTime(seconds, clip.speed);
   const motion = clip.motion;
@@ -155,6 +219,22 @@ export function poseAt(clip: RigClip, seconds: number): Pose {
       return [id, { x: p.x + dx, y: p.y + dy }];
     }),
   );
+}
+
+/** Each joint's children, for moving a limb as one piece. */
+export const CHILDREN: Record<string, string[]> = INITIAL_JOINTS.reduce<Record<string, string[]>>((acc, j) => {
+  if (j.parent) (acc[j.parent] ??= []).push(j.id);
+  return acc;
+}, {});
+
+export function descendants(id: string): string[] {
+  const out: string[] = [];
+  const walk = (j: string) => (CHILDREN[j] ?? []).forEach((c) => {
+    out.push(c);
+    walk(c);
+  });
+  walk(id);
+  return out;
 }
 
 /* ---------- Defaults ---------- */

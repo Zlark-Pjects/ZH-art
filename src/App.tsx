@@ -8,7 +8,7 @@ import { Button, cx } from "./ui";
 import { Leader } from "./features/Leader";
 
 const CharactersView = lazy(() => import("./features/forge/CharactersView").then((m) => ({ default: m.CharactersView })));
-const RiggingMoCap = lazy(() => import("./components/RiggingMoCap"));
+const MotionView = lazy(() => import("./features/motion/MotionView").then((m) => ({ default: m.MotionView })));
 const ExportPanel = lazy(() => import("./features/export/ExportPanel").then((m) => ({ default: m.ExportPanel })));
 
 const VIEWS = [
@@ -109,10 +109,7 @@ export default function App() {
               onApplyGrade={studio.setGrade}
             />,
           )}
-          {panel(
-            "rig",
-            <RiggingMoCap characters={studio.project.characters} clips={studio.project.clips} onSaveClip={studio.upsertClip} onDeleteClip={studio.removeClip} />,
-          )}
+          {panel("rig", <MotionView studio={studio} />)}
           {panel("export", <ExportPanel studio={studio} />)}
         </Suspense>
       </main>
@@ -143,7 +140,7 @@ function Guide({ onClose }: { onClose: () => void }) {
     ["Timeline", "Under the picture: drag scenes to reorder, drag their edges to trim, split at the playhead, and pick a transition between any two scenes. Add titles and captions on the text track. Add your own song on the music track; ZH-art finds its beat, so cuts snap to it, or press Cut on beat to line every cut up at once."],
     ["Looks", "A library of colour and atmosphere. Preview one on the current scene, then apply it to every scene at once."],
     ["Characters", "Forge whole characters from parts — bodies, heads, eyes, wings, tails, props — on two legs, four legs, wings, a serpent's coil or floating — or let the generator surprise you: pick an archetype, mutate, breed two designs, and lock what you like. Export any character as a game sprite sheet with idle, walk, run, jump and attack loops. The portrait studio handles faces and the film's colour grade."],
-    ["Motion rig", "Pose a skeleton, layer a motion like a run or a float, record keyframes, or act it out on your webcam — motion capture runs on your device and the video never leaves the browser. Save the result as a clip to cast in any scene."],
+    ["Motion", "Pose your character by dragging its joints, then key poses over time: each key has its own timing and easing (smooth, ease in or out, overshoot, bounce, hold), with onion-skin ghosts of the keys either side. Layer a motion like a run or a float on top. Or capture a performance from your webcam or any video file, then trim, smooth and foot-lock the take. Tracking runs on your device; nothing is uploaded. Save clips to cast in any scene."],
     ["Export", "Record the finished film, with its transitions, text, song and score, to a video file — widescreen, vertical 9:16 or square."],
   ];
 

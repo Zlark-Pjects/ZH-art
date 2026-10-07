@@ -233,7 +233,7 @@ export function SceneInspector({
             <Notice>
               Design a character and save a motion clip first.{" "}
               <button type="button" className="underline underline-offset-4" onClick={() => onNavigate(studio.project.characters.length ? "rig" : "characters")}>
-                {studio.project.characters.length ? "Open the motion rig" : "Open characters"}
+                {studio.project.characters.length ? "Open Motion" : "Open characters"}
               </button>
             </Notice>
           ) : (

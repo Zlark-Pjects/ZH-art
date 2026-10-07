@@ -136,7 +136,7 @@ export interface CharacterBuild {
 
 export type MotionId = "idle" | "run" | "float" | "strike" | "wave";
 
-/** An animation made in the Motion rig tab. */
+/** An animation made in the Motion tab. */
 export interface RigClip {
   id: string;
   name: string;
@@ -145,10 +145,19 @@ export interface RigClip {
   motion: MotionId | null;
   speed: number;
   intensity: number;
-  /** Optional hand-made keyframes, played in a loop over the motion */
+  /** Optional keyframes, played in a loop under the motion */
   keyframes: Record<string, { x: number; y: number }>[];
+  /** Spacing between keyframes when keyTimes is missing (older clips) */
   keyframeSeconds: number;
+  /** When each keyframe happens, seconds from the start of the loop */
+  keyTimes?: number[];
+  /** How each keyframe eases into the next */
+  keyEasing?: Easing[];
+  /** Loop length in seconds; defaults to the last key plus one spacing */
+  length?: number;
 }
+
+export type Easing = "hold" | "linear" | "smooth" | "in" | "out" | "back" | "bounce";
 
 /** A character placed in a scene, running a clip. */
 export interface CastMember {

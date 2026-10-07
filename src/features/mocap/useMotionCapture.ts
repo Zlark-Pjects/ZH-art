@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { PoseLandmarker } from "@mediapipe/tasks-vision";
 import type { Pose } from "../../project/rig";
-import { PREVIEW_BONES, landmarksToPose, loadLandmarker, smoothPose, type Landmark } from "./poseTracking";
+import { PREVIEW_BONES, detectPose, landmarksToPose, loadLandmarker, smoothPose, type Landmark } from "./poseTracking";
 
 export type MocapStatus = "off" | "starting" | "loading" | "tracking" | "error";
 export type RecordState = "idle" | "countdown" | "recording";
@@ -97,8 +97,7 @@ export function useMotionCapture(onTake: (frames: Pose[], frameSeconds: number) 
     if (video.readyState >= 2 && video.videoWidth > 0 && video.currentTime !== lastVideoTimeRef.current) {
       lastVideoTimeRef.current = video.currentTime;
       const now = performance.now();
-      const result = landmarker.detectForVideo(video, now);
-      const lm = (result.landmarks?.[0] as Landmark[] | undefined) ?? null;
+      const lm = detectPose(landmarker, video);
       const pose = lm ? landmarksToPose(lm, video.videoWidth, video.videoHeight) : null;
       livePose.current = pose ? smoothPose(livePose.current, pose) : null;
       setPersonVisible((v) => (v === Boolean(pose) ? v : Boolean(pose)));

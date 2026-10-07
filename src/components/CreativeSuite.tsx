@@ -564,7 +564,7 @@ export default function CreativeSuite({
           </div>
         </div>
         <p className="text-xs text-fg/50 max-w-md font-sans leading-relaxed">
-          Design the cast — face, hair, colours, costume — and the film grade. Save a character and it appears in the Motion rig and the storyboard; apply the grade and every scene and export uses it.
+          Design the cast — face, hair, colours, costume — and the film grade. Save a character and it appears in Motion and the storyboard; apply the grade and every scene and export uses it.
         </p>
       </div>
 

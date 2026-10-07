@@ -1,16 +1,17 @@
-import { useEffect, useState } from "react";
+import { Suspense, lazy, useEffect, useState } from "react";
 import { Dices, Pause, Play, Undo2, Volume2, VolumeX, Wand2 } from "lucide-react";
 import type { Studio } from "../useStudio";
 import { VISUAL_PRESETS } from "../../lib/presets";
-import { SAMPLE_FILMS } from "../../project/samples";
 import { Button, RailTabs, Section, Segmented, StudioLayout, cx } from "../../ui";
 import { FilmGate } from "../../ui/FilmGate";
 import { StoryboardStage, type StageSelection } from "./StoryboardStage";
 import { SceneInspector } from "./SceneInspector";
 import { Timeline } from "../timeline/Timeline";
 import { TextLayer } from "../timeline/TextLayer";
-import { TextPanel } from "../timeline/TextPanel";
-import { SoundPanel } from "../timeline/SoundPanel";
+
+const TextPanel = lazy(() => import("../timeline/TextPanel").then((m) => ({ default: m.TextPanel })));
+const SoundPanel = lazy(() => import("../timeline/SoundPanel").then((m) => ({ default: m.SoundPanel })));
+const SampleFilms = lazy(() => import("./SampleFilms").then((m) => ({ default: m.SampleFilms })));
 import { transitionAt, transitionLook } from "../timeline/timeline";
 
 type RailTab = "build" | "scene" | "text" | "sound";
@@ -133,8 +134,10 @@ export function StoryboardView({ studio, onNavigate }: { studio: Studio; onNavig
       />
       {tab === "build" && <BuildPanel studio={studio} />}
       {tab === "scene" && <SceneInspector studio={studio} selection={selection} setSelection={setSelection} onNavigate={onNavigate} />}
-      {tab === "text" && <TextPanel studio={studio} selected={selectedText} onSelect={setSelectedText} />}
-      {tab === "sound" && <SoundPanel studio={studio} />}
+      <Suspense fallback={<p className="eyebrow py-10 text-center">Loading…</p>}>
+        {tab === "text" && <TextPanel studio={studio} selected={selectedText} onSelect={setSelectedText} />}
+        {tab === "sound" && <SoundPanel studio={studio} />}
+      </Suspense>
     </div>
   );
 
@@ -216,23 +219,9 @@ function BuildPanel({ studio }: { studio: Studio }) {
         <p className="text-xs leading-relaxed text-faint">Building replaces the scenes. Characters, clips, text, music and the grade are kept.</p>
       </div>
 
-      <Section index="04" title="Or start from a sample">
-        <ul className="flex flex-col gap-1.5">
-          {SAMPLE_FILMS.map((film) => (
-            <li key={film.id}>
-              <button
-                type="button"
-                onClick={() => studio.openSample(film)}
-                className="w-full rounded-[3px] border border-line px-3 py-2.5 text-left transition-colors hover:border-line-strong"
-              >
-                <span className="block text-[14px] text-fg">{film.name}</span>
-                <span className="mt-0.5 block truncate text-xs text-faint">{film.description}</span>
-              </button>
-            </li>
-          ))}
-        </ul>
-        <p className="mt-3 text-xs text-faint">Replaces the scenes; Undo brings yours back.</p>
-      </Section>
+      <Suspense fallback={null}>
+        <SampleFilms studio={studio} />
+      </Suspense>
     </div>
   );
 }

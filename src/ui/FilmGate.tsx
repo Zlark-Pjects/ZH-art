@@ -21,6 +21,7 @@ export function FilmGate({
   time,
   progress,
   portrait,
+  aspect,
   controls,
   children,
 }: {
@@ -29,12 +30,14 @@ export function FilmGate({
   time?: number;
   progress?: number;
   portrait?: boolean;
+  /** Tailwind aspect classes, overriding the 16:9 default */
+  aspect?: string;
   controls?: ReactNode;
   children: ReactNode;
 }) {
   return (
     <figure className="relative w-full overflow-hidden bg-black ring-1 ring-line">
-      <div className={cx("relative w-full", portrait ? "mx-auto aspect-[9/16] max-h-[78vh]" : "aspect-video")}>
+      <div className={cx("relative w-full", portrait ? "mx-auto aspect-[9/16] max-h-[78vh]" : aspect ?? "aspect-video")}>
         <div className="absolute inset-0">{children}</div>
         <div className="grain pointer-events-none absolute inset-0" />
         <div className="crop-marks pointer-events-none absolute inset-[calc(7%+10px)_12px]" />

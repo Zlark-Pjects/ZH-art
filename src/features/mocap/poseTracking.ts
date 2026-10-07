@@ -48,8 +48,17 @@ export interface Landmark {
   visibility?: number;
 }
 
-// MediaPipe landmark indices -> rig joints. The view is mirrored, so the
-// performer's left side drives the rig's screen-left ("l_") joints.
+let lastTimestamp = 0;
+
+/** Run the model on one frame. Timestamps must only ever increase, across webcam and video use. */
+export function detectPose(landmarker: PoseLandmarker, source: HTMLVideoElement): Landmark[] | null {
+  lastTimestamp = Math.max(performance.now(), lastTimestamp + 1);
+  const result = landmarker.detectForVideo(source, lastTimestamp);
+  return (result.landmarks?.[0] as Landmark[] | undefined) ?? null;
+}
+
+// MediaPipe landmark indices -> rig joints. The webcam view is mirrored, so
+// the performer's left side drives the rig's screen-left ("l_") joints.
 const MAP: Record<string, number> = {
   head: 0,
   l_shoulder: 11,
@@ -77,9 +86,14 @@ const PELVIS = { x: 200, y: 260 };
  * keeps the same size however far the performer stands from the camera.
  * Joints the camera can't see fall back to the standing pose.
  */
-export function landmarksToPose(lm: Landmark[], videoW: number, videoH: number): Pose | null {
-  const px = (i: number) => ({ x: (1 - lm[i].x) * videoW, y: lm[i].y * videoH });
-  const seen = (i: number) => (lm[i]?.visibility ?? 1) >= VISIBLE;
+export function landmarksToPose(lm: Landmark[], videoW: number, videoH: number, mirror = true): Pose | null {
+  // Unmirrored footage shows the performer's left on screen right: swap sides
+  const flip = (i: number) => (mirror || i < 11 ? i : i % 2 === 1 ? i + 1 : i - 1);
+  const px = (i: number) => {
+    const p = lm[flip(i)];
+    return { x: (mirror ? 1 - p.x : p.x) * videoW, y: p.y * videoH };
+  };
+  const seen = (i: number) => (lm[flip(i)]?.visibility ?? 1) >= VISIBLE;
   if (!seen(11) || !seen(12)) return null; // need at least the shoulders
 
   const ls = px(11);

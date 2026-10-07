@@ -4,7 +4,8 @@ import { STYLE_PALETTES, applyPalette, buildStoryboard } from "../project/builde
 import { useProject } from "../project/useProject";
 import { usePlayback } from "./storyboard/usePlayback";
 import { loadSong } from "../lib/music";
-import { sampleBoard, type SampleFilm } from "../project/samples";
+import type { SampleFilm } from "../project/samples";
+import { sampleBoard } from "../project/sampleBoard";
 
 /**
  * The whole studio: the shared project (autosaved), playback, and the

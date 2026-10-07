@@ -24,7 +24,7 @@ export const GAME_STATES: { id: GameState; label: string; seconds: number }[] = 
 export const stateSeconds = (s: GameState) => GAME_STATES.find((g) => g.id === s)?.seconds ?? 1;
 
 export const BODY_PLANS: { id: BodyPlan; label: string; hint: string }[] = [
-  { id: "biped", label: "Two legs", hint: "Stands upright, front view; uses Motion rig clips in films" },
+  { id: "biped", label: "Two legs", hint: "Stands upright, front view; uses Motion clips in films" },
   { id: "quadruped", label: "Four legs", hint: "Side view; legs follow the leg style, six with spider legs" },
   { id: "flyer", label: "Flyer", hint: "Side view; always winged, hovers and swoops" },
   { id: "serpent", label: "Serpent", hint: "Side view; a long body that slithers, legs make it a centipede" },
@@ -33,7 +33,7 @@ export const BODY_PLANS: { id: BodyPlan; label: string; hint: string }[] = [
 
 export const planOf = (look: CharacterLook): BodyPlan => buildOf(look).plan ?? "biped";
 
-/** Which game state a Motion rig clip reads as, for characters that aren't bipeds. */
+/** Which game state a Motion clip reads as, for characters that aren't bipeds. */
 export function stateForClip(clip: RigClip): GameState {
   if (clip.motion === "run") return clip.intensity < 0.6 ? "walk" : "run";
   if (clip.motion === "strike") return "attack";
