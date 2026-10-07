@@ -158,6 +158,25 @@ export function StoryboardStage({
                   </g>
                 );
               })}
+            {/* While laying out, show where moving characters travel */}
+            {li === 1 &&
+              interactive &&
+              (scene.cast ?? []).map((m, ci) =>
+                m.path && m.path.length > 1 ? (
+                  <g key={`path-${ci}`} pointerEvents="none" opacity={selection?.kind === "cast" && selection.index === ci ? 1 : 0.5}>
+                    <polyline
+                      points={[...m.path].sort((a, b) => a.t - b.t).map((k) => `${(k.x / 100) * FRAME_W},${(k.y / 100) * FRAME_H}`).join(" ")}
+                      fill="none"
+                      stroke="#ffb224"
+                      strokeWidth={4}
+                      strokeDasharray="14 10"
+                    />
+                    {m.path.map((k, n) => (
+                      <rect key={n} x={(k.x / 100) * FRAME_W - 9} y={(k.y / 100) * FRAME_H - 9} width={18} height={18} fill="#ffb224" transform={`rotate(45 ${(k.x / 100) * FRAME_W} ${(k.y / 100) * FRAME_H})`} />
+                    ))}
+                  </g>
+                ) : null,
+              )}
           </g>
         ))}
 

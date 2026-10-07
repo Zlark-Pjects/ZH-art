@@ -168,6 +168,62 @@ class SynthEngine {
     return this.recordDestination?.stream ?? null;
   }
 
+  /**
+   * Schedule `seconds` of the score into another (offline) audio context,
+   * feeding `out`. Used to render an export's soundtrack faster than real
+   * time. The live engine's own state is restored afterwards.
+   */
+  public scheduleOffline(ctx: BaseAudioContext, out: AudioNode, vibe: string, scaleName: string, bpm: number, seconds: number) {
+    const saved = {
+      ctx: this.ctx,
+      bass: this.bassGain,
+      pad: this.padGain,
+      arp: this.arpGain,
+      drum: this.drumGain,
+      vibe: this.currentVibe,
+      scale: this.scale,
+      bpm: this.bpm,
+      step: this.currentStep,
+      next: this.nextStepTime,
+      callback: this.beatCallback,
+    };
+    const bus = (level: number) => {
+      const g = ctx.createGain();
+      g.gain.value = level;
+      g.connect(out);
+      return g;
+    };
+    try {
+      this.ctx = ctx as AudioContext;
+      this.bassGain = bus(0.4);
+      this.padGain = bus(0.55);
+      this.arpGain = bus(0.35);
+      this.drumGain = bus(0.5);
+      this.currentVibe = vibe;
+      this.setScale(scaleName);
+      this.updateBpm(bpm);
+      this.beatCallback = null;
+      this.currentStep = 0;
+      this.nextStepTime = 0;
+      while (this.nextStepTime < seconds) {
+        this.scheduleStep(this.currentStep, this.nextStepTime);
+        this.advanceStep();
+      }
+    } finally {
+      this.ctx = saved.ctx;
+      this.bassGain = saved.bass;
+      this.padGain = saved.pad;
+      this.arpGain = saved.arp;
+      this.drumGain = saved.drum;
+      this.currentVibe = saved.vibe;
+      this.scale = saved.scale;
+      this.bpm = saved.bpm;
+      this.currentStep = saved.step;
+      this.nextStepTime = saved.next;
+      this.beatCallback = saved.callback;
+    }
+  }
+
   public updateBpm(bpm: number) {
     this.bpm = Math.max(40, Math.min(220, bpm));
   }

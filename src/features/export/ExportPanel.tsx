@@ -3,7 +3,8 @@ import { Download, Square, Video } from "lucide-react";
 import type { Studio } from "../useStudio";
 import { Button, Field, Notice, Progress, Section, Segmented } from "../../ui";
 import { saveFile } from "../../lib/saveFile";
-import { recordStoryboard, supportedRecordingType } from "./recordStoryboard";
+import { recordStoryboard, supportedRecordingType, type ExportOptions } from "./recordStoryboard";
+import { encodeFilm, fastExportFormat, type FastFormat } from "./encodeFilm";
 
 const RESOLUTIONS = {
   "720p": { width: 1280, height: 720, label: "720p" },
@@ -12,6 +13,8 @@ const RESOLUTIONS = {
   square: { width: 1080, height: 1080, label: "1:1" },
 } as const;
 type ResolutionKey = keyof typeof RESOLUTIONS;
+
+const STAGE_LABEL = { sound: "Mixing the sound", frames: "Rendering frames", saving: "Saving", recording: "Recording" } as const;
 
 function formatBytes(bytes: number) {
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
@@ -22,7 +25,7 @@ export function ExportPanel({ studio }: { studio: Studio }) {
   const storyboard = studio.board;
   const { backdrops, project, playback } = studio;
   const music = project.music ?? null;
-  const format = useMemo(supportedRecordingType, []);
+  const realtime = useMemo(supportedRecordingType, []);
   const [resolution, setResolution] = useState<ResolutionKey>("1080p");
   const [fps, setFps] = useState<"24" | "30" | "60">("30");
   const [bitrate, setBitrate] = useState(8);
@@ -32,6 +35,20 @@ export function ExportPanel({ studio }: { studio: Studio }) {
   const [result, setResult] = useState<{ url: string; blob: Blob; size: number; name: string } | null>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const abortRef = useRef<AbortController | null>(null);
+
+  const [fast, setFast] = useState<FastFormat | null>(null);
+  const [stage, setStage] = useState<"sound" | "frames" | "saving" | "recording">("recording");
+  const { width: outW, height: outH } = RESOLUTIONS[resolution];
+  // Frame-by-frame encoding when the browser has WebCodecs; real-time recording otherwise
+  useEffect(() => {
+    let live = true;
+    fastExportFormat(outW, outH, Number(fps), bitrate * 1_000_000).then((f) => live && setFast(f));
+    return () => {
+      live = false;
+    };
+  }, [outW, outH, fps, bitrate]);
+  const formatLabel = fast?.label ?? realtime?.label;
+  const canExport = Boolean(fast || realtime);
 
   const duration = storyboard.scenes.reduce((sum, s) => sum + s.duration, 0);
   const estimate = ((duration * bitrate) / 8) * 1024 * 1024;
@@ -52,10 +69,7 @@ export function ExportPanel({ studio }: { studio: Studio }) {
     abortRef.current = controller;
     try {
       const { width, height } = RESOLUTIONS[resolution];
-      const out = await recordStoryboard(
-        storyboard,
-        canvasRef.current,
-        {
+      const options: ExportOptions = {
           width,
           height,
           fps: Number(fps),
@@ -71,10 +85,16 @@ export function ExportPanel({ studio }: { studio: Studio }) {
           titleCards: project.titleCards ?? true,
           score: !music || music.withScore,
           song: music && studio.songBuffer ? { buffer: studio.songBuffer, offset: music.offset, volume: music.volume } : null,
-        },
-        setProgress,
-        controller.signal,
-      );
+      };
+      const out = fast
+        ? await encodeFilm(storyboard, canvasRef.current, options, fast, (f, st) => {
+            setStage(st);
+            setProgress(f);
+          }, controller.signal)
+        : await recordStoryboard(storyboard, canvasRef.current, options, (f) => {
+            setStage("recording");
+            setProgress(f);
+          }, controller.signal);
       const slug = storyboard.title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "storyboard";
       setResult({
         url: URL.createObjectURL(out.blob),
@@ -110,25 +130,27 @@ export function ExportPanel({ studio }: { studio: Studio }) {
             <div className="flex h-full w-full flex-col justify-end p-[8%]">
               <p className="font-display text-[clamp(2.5rem,6vw,5.5rem)] uppercase leading-[0.88]">Print it</p>
               <p className="mt-4 max-w-md font-serif text-xl italic text-muted">
-                Records the storyboard and its score to a video file, right here in the browser. It plays in real time: {duration.toFixed(0)} seconds.
+                {fast
+                  ? `Renders the film frame by frame to a video file, right here in the browser — every frame exact, usually faster than playing it (${duration.toFixed(0)} seconds of film).`
+                  : `Records the film and its sound to a video file, right here in the browser. It plays in real time: ${duration.toFixed(0)} seconds.`}
               </p>
             </div>
           )}
           {recording && (
             <span className="eyebrow absolute left-4 top-4 flex items-center gap-2 text-fg">
-              <span className="h-2 w-2 animate-pulse rounded-full bg-danger" aria-hidden /> Recording
+              <span className="h-2 w-2 animate-pulse rounded-full bg-danger" aria-hidden /> {STAGE_LABEL[stage]}
             </span>
           )}
         </div>
       </div>
 
       <div className="mt-8 xl:mt-0">
-        {!format && (
+        {!canExport && (
           <div className="mb-6">
             <Notice tone="error">This browser can't record video. Use a recent Chrome, Edge, Firefox or Safari.</Notice>
           </div>
         )}
-        <Section index="01" title="Picture" aside={format?.label}>
+        <Section index="01" title="Picture" aside={formatLabel}>
           <div className="flex flex-col gap-5">
             <Segmented
               label="Size"
@@ -149,14 +171,14 @@ export function ExportPanel({ studio }: { studio: Studio }) {
           </label>
         </Section>
         <div className="flex flex-col gap-4 border-t border-line pt-6 pb-8">
-          {recording && <Progress value={(progress ?? 0) * 100} label="Recording" />}
+          {recording && <Progress value={(progress ?? 0) * 100} label={STAGE_LABEL[stage]} />}
           {error && <Notice tone="error">{error}</Notice>}
           {recording ? (
             <Button variant="danger" className="w-full" icon={<Square className="h-4 w-4" />} onClick={() => abortRef.current?.abort()}>
               Cancel
             </Button>
           ) : (
-            <Button variant="primary" size="lg" className="w-full" icon={<Video className="h-5 w-5" />} disabled={!format} onClick={start}>
+            <Button variant="primary" size="lg" className="w-full" icon={<Video className="h-5 w-5" />} disabled={!canExport} onClick={start}>
               {result ? "Record again" : "Record video"}
             </Button>
           )}
@@ -171,7 +193,9 @@ export function ExportPanel({ studio }: { studio: Studio }) {
               Download · {formatBytes(result.size)}
             </Button>
           )}
-          <p className="text-xs leading-relaxed text-faint">Keep this tab in front while recording; browsers slow down background tabs.</p>
+          <p className="text-xs leading-relaxed text-faint">
+            {fast ? "Encodes every frame on this device; you can switch tabs while it works." : "Keep this tab in front while recording; browsers slow down background tabs."}
+          </p>
         </div>
       </div>
     </div>

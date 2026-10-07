@@ -1,4 +1,4 @@
-import type { CharacterLook, ElementSpec, Grade, RigClip, Scene } from "../../types";
+import type { CastMember, CharacterLook, ElementSpec, Grade, RigClip, Scene } from "../../types";
 import { RIG_FLOOR, ease } from "../../project/rig";
 import type { DrawOp } from "../../project/forge/figure";
 import { drawClip } from "../../project/forge/plans";
@@ -220,6 +220,37 @@ export interface PlacedFigure {
   ops: DrawOp[];
 }
 
+/** Where a cast member stands at `t` seconds into the scene, and which way it's travelling (-1, 0, 1). */
+export function castPosition(member: CastMember, t: number): { x: number; y: number; dir: number } {
+  const keys = member.path;
+  if (!keys?.length) return { x: member.x, y: member.y, dir: 0 };
+  const sorted = [...keys].sort((a, b) => a.t - b.t);
+  const at = (time: number) => {
+    if (time <= sorted[0].t) return sorted[0];
+    const last = sorted[sorted.length - 1];
+    if (time >= last.t) return last;
+    let k = 0;
+    while (k < sorted.length - 2 && sorted[k + 1].t <= time) k++;
+    const a = sorted[k];
+    const b = sorted[k + 1];
+    const e = ease(a.easing, (time - a.t) / Math.max(1e-6, b.t - a.t));
+    return { x: a.x + (b.x - a.x) * e, y: a.y + (b.y - a.y) * e };
+  };
+  const now = at(t);
+  const soon = at(t + 0.05);
+  const before = at(t - 0.05);
+  const dx = soon.x - before.x;
+  if (Math.abs(dx) >= 0.01) return { x: now.x, y: now.y, dir: Math.sign(dx) };
+  // Standing still: keep facing the way it last travelled (or will travel next)
+  let dir = 0;
+  for (let k = 0; k < sorted.length - 1; k++) {
+    const step = sorted[k + 1].x - sorted[k].x;
+    if (Math.abs(step) < 0.01) continue;
+    if (sorted[k].t < t || dir === 0) dir = Math.sign(step);
+  }
+  return { x: now.x, y: now.y, dir };
+}
+
 /** Figures for every cast member of the scene, posed at time t. */
 export function castFigures(scene: Scene, t: number, characters: CharacterLook[], clips: RigClip[]): PlacedFigure[] {
   if (!scene.cast?.length) return [];
@@ -230,11 +261,13 @@ export function castFigures(scene: Scene, t: number, characters: CharacterLook[]
     if (!look || !clip) continue;
     // Bipeds perform the rig clip; other body plans play the matching game animation
     const ops = drawClip(look, clip, t);
-    const x = (member.x / 100) * FRAME_W;
-    const y = (member.y / 100) * FRAME_H;
+    const pos = castPosition(member, t);
+    const x = (pos.x / 100) * FRAME_W;
+    const y = (pos.y / 100) * FRAME_H;
     // Rig height from head top (~50) to feet maps to `scale` of the frame height
     const scale = (Math.max(0.1, member.scale) * FRAME_H) / (RIG_FLOOR - 50);
-    const flip = Boolean(member.flip);
+    // Characters face right by default; facing travel turns them when they head left
+    const flip = member.faceTravel && pos.dir !== 0 ? pos.dir < 0 !== Boolean(member.flip) : Boolean(member.flip);
     out.push({
       transform: `translate(${x} ${y}) scale(${flip ? -scale : scale} ${scale}) translate(-200 ${-RIG_FLOOR})`,
       x,

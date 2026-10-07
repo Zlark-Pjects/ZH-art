@@ -181,6 +181,20 @@ export interface CastMember {
   y: number; // 0-100, feet position down the frame
   scale: number; // fraction of frame height, 0.2-1
   flip?: boolean;
+  /** Where the character is at moments of the scene; when present it travels between them */
+  path?: CastKey[];
+  /** Turn to face the direction of travel */
+  faceTravel?: boolean;
+}
+
+/** A cast member's position at one moment of a scene. */
+export interface CastKey {
+  /** Seconds into the scene */
+  t: number;
+  x: number; // 0-100
+  y: number; // 0-100
+  /** How the character moves from this key to the next */
+  easing: Easing;
 }
 
 /** Colour grade from the Characters tab, applied to the whole film. */

@@ -6,6 +6,7 @@ import { Button, ColorField, Field, IconButton, Notice, Section, Segmented, Slid
 import type { StageSelection } from "./StoryboardStage";
 import { TRANSITIONS } from "../timeline/timeline";
 import { CameraKeys, CameraModeSwitch } from "./CameraKeys";
+import { CastPath } from "./CastPath";
 
 export const CAMERA_PRESETS: Record<CameraMotion["type"], { label: string; motion: Omit<CameraMotion, "type" | "speed"> }> = {
   "zoom-in": { label: "Push in", motion: { scaleStart: 1, scaleEnd: 1.18, xStart: 0, xEnd: 0, yStart: 0, yEnd: 0 } },
@@ -294,14 +295,17 @@ export function SceneInspector({
                       </Field>
                     </div>
                     <Slider label="Height" value={m.scale} min={0.15} max={1} step={0.01} onChange={(v) => setCast(i, { scale: v })} format={(v) => `${Math.round(v * 100)}% of frame`} />
-                    <div className="grid grid-cols-2 gap-4">
-                      <Slider label="Across" value={m.x} min={0} max={100} onChange={(v) => setCast(i, { x: v })} format={(v) => `${Math.round(v)}%`} />
-                      <Slider label="Feet at" value={m.y} min={20} max={110} onChange={(v) => setCast(i, { y: v })} format={(v) => `${Math.round(v)}%`} />
-                    </div>
+                    {!m.path?.length && (
+                      <div className="grid grid-cols-2 gap-4">
+                        <Slider label="Across" value={m.x} min={0} max={100} onChange={(v) => setCast(i, { x: v })} format={(v) => `${Math.round(v)}%`} />
+                        <Slider label="Feet at" value={m.y} min={20} max={110} onChange={(v) => setCast(i, { y: v })} format={(v) => `${Math.round(v)}%`} />
+                      </div>
+                    )}
                     <label className="flex items-center justify-between text-[14px] text-fg">
                       Face the other way
                       <input type="checkbox" checked={Boolean(m.flip)} onChange={(e) => setCast(i, { flip: e.target.checked })} className="h-4 w-4 accent-[var(--color-accent)]" />
                     </label>
+                    <CastPath studio={studio} sceneIndex={index} castIndex={i} />
                   </div>
                 )}
               </div>

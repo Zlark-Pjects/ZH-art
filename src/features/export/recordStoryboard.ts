@@ -86,20 +86,38 @@ function wrapLines(ctx: CanvasRenderingContext2D, text: string, maxWidth: number
   return lines;
 }
 
+// One scratch picture per output canvas, for grading a whole frame in a single pass
+const pictureBuffers = new WeakMap<HTMLCanvasElement | OffscreenCanvas, HTMLCanvasElement>();
+
 /** Draw one frame of `scene` at `t` seconds onto a canvas of any size. */
 export function drawScene(
-  ctx: CanvasRenderingContext2D,
+  outCtx: CanvasRenderingContext2D,
   scene: Scene,
   t: number,
   backdrop: HTMLImageElement | null,
   fadeIn: number,
   extras: DrawExtras,
 ) {
-  const { width: w, height: h } = ctx.canvas;
+  const { width: w, height: h } = outCtx.canvas;
   const frame = computeFrame(scene, t, { bass: 0, mid: 0, treble: 0 });
   const figures = castFigures(scene, t, extras.characters, extras.clips);
-  // Colour grade (canvas filters are supported in Chromium and Firefox)
-  ctx.filter = gradeFilter(extras.grade);
+  // Colour grade: a canvas filter on every shape is very slow, so the picture is drawn
+  // unfiltered and graded once as a whole (and not at all when the grade is neutral)
+  const graded = extras.grade.contrast !== 100 || extras.grade.saturation !== 100;
+  let ctx = outCtx;
+  if (graded) {
+    let buf = pictureBuffers.get(outCtx.canvas);
+    if (!buf) {
+      buf = document.createElement("canvas");
+      pictureBuffers.set(outCtx.canvas, buf);
+    }
+    if (buf.width !== w || buf.height !== h) {
+      buf.width = w;
+      buf.height = h;
+    }
+    ctx = buf.getContext("2d")!;
+    ctx.clearRect(0, 0, w, h);
+  }
 
   // Fit the 1600x900 frame like object-fit: cover
   const s = Math.max(w / FRAME_W, h / FRAME_H);
@@ -186,13 +204,17 @@ export function drawScene(
   ctx.fillRect(-1, -1, 2, 2);
   ctx.restore();
   ctx.restore();
-  ctx.filter = "none";
+  if (graded) {
+    outCtx.filter = gradeFilter(extras.grade);
+    outCtx.drawImage(ctx.canvas, 0, 0);
+    outCtx.filter = "none";
+  }
 
-  if (extras.titleCards !== false) drawTitleCard(ctx, scene);
+  if (extras.titleCards !== false) drawTitleCard(outCtx, scene);
 
   if (fadeIn < 1) {
-    ctx.fillStyle = `rgba(0,0,0,${1 - fadeIn})`;
-    ctx.fillRect(0, 0, w, h);
+    outCtx.fillStyle = `rgba(0,0,0,${1 - fadeIn})`;
+    outCtx.fillRect(0, 0, w, h);
   }
 }
 
@@ -337,6 +359,23 @@ export function drawFilm(
   drawTexts(ctx, extras.texts, t);
 }
 
+/** Load the fonts the film draws with, and its backdrop images. */
+export async function prepareAssets(backdrops: Record<number, string>) {
+  await Promise.all([
+    document.fonts?.load(`64px Anton`),
+    document.fonts?.load(`italic 24px "Instrument Serif"`),
+    document.fonts?.load(`12px "Geist Mono"`),
+    document.fonts?.load(`600 24px Geist`),
+  ]).catch(() => undefined);
+  const images: Record<number, HTMLImageElement | null> = {};
+  await Promise.all(
+    Object.entries(backdrops).map(async ([i, src]) => {
+      images[Number(i)] = await loadImage(src);
+    }),
+  );
+  return images;
+}
+
 /**
  * Plays the storyboard onto a canvas in real time and records it, with the
  * procedural score, using MediaRecorder. Takes as long as the storyboard runs.
@@ -356,19 +395,7 @@ export async function recordStoryboard(
   const ctx = canvas.getContext("2d");
   if (!ctx) throw new Error("Couldn't create a drawing surface.");
 
-  await Promise.all([
-    document.fonts?.load(`64px Anton`),
-    document.fonts?.load(`italic 24px "Instrument Serif"`),
-    document.fonts?.load(`12px "Geist Mono"`),
-    document.fonts?.load(`600 24px Geist`),
-  ]).catch(() => undefined);
-
-  const images: Record<number, HTMLImageElement | null> = {};
-  await Promise.all(
-    Object.entries(opts.backdrops).map(async ([i, src]) => {
-      images[Number(i)] = await loadImage(src);
-    }),
-  );
+  const images = await prepareAssets(opts.backdrops);
 
   const { total } = sceneStarts(board.scenes);
   const scratch = document.createElement("canvas");

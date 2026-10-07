@@ -13,6 +13,7 @@ const TextPanel = lazy(() => import("../timeline/TextPanel").then((m) => ({ defa
 const SoundPanel = lazy(() => import("../timeline/SoundPanel").then((m) => ({ default: m.SoundPanel })));
 const SampleFilms = lazy(() => import("./SampleFilms").then((m) => ({ default: m.SampleFilms })));
 import { transitionAt, transitionLook } from "../timeline/timeline";
+import { keyCastAt } from "./CastPath";
 
 type RailTab = "build" | "scene" | "text" | "sound";
 
@@ -58,7 +59,12 @@ export function StoryboardView({ studio, onNavigate }: { studio: Studio; onNavig
     if (sel.kind === "element") {
       studio.updateScene(i, (s) => ({ ...s, elements: s.elements.map((el, k) => (k === sel.index ? { ...el, position: { x, y } } : el)) }));
     } else {
-      studio.updateScene(i, (s) => ({ ...s, cast: (s.cast ?? []).map((m, k) => (k === sel.index ? { ...m, x, y } : m)) }));
+      // A moving character is keyed at the playhead; a still one just moves
+      const t = playback.elapsed;
+      studio.updateScene(i, (s) => ({
+        ...s,
+        cast: (s.cast ?? []).map((m, k) => (k !== sel.index ? m : m.path?.length ? { ...m, path: keyCastAt(m, t, x, y) } : { ...m, x, y })),
+      }));
     }
   };
 
@@ -83,7 +89,7 @@ export function StoryboardView({ studio, onNavigate }: { studio: Studio; onNavig
       {scene && (
         <StoryboardStage
           scene={scene}
-          elapsed={layout ? 0 : playback.elapsed}
+          elapsed={playback.elapsed}
           isPlaying={playback.isPlaying}
           backdropUrl={studio.backdrops[playback.sceneIndex]}
           characters={project.characters}
