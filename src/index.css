@@ -1,6 +1,114 @@
 @import "tailwindcss";
 
+/* ZH-art design tokens: "projection booth".
+   Ink dominates, tungsten amber is the only accent and is used sparingly. */
 @theme {
-  --font-serif: "Playfair Display", serif;
-  --font-sans: "Space Grotesk", sans-serif;
+  --color-ink: #08080a;
+  --color-surface: #0f0f12;
+  --color-raised: #17171c;
+  --color-line: rgb(237 234 227 / 0.09);
+  --color-line-strong: rgb(237 234 227 / 0.18);
+  --color-fg: #edeae3;
+  --color-muted: #8e8b84;
+  --color-faint: #5d5b56;
+  --color-accent: #ffb224;
+  --color-accent-strong: #ffc65c;
+  --color-danger: #ff5a4e;
+  --color-ok: #8bd99b;
+
+  --font-display: "Anton", "Impact", "Haettenschweiler", "Arial Narrow Bold", sans-serif;
+  --font-serif: "Instrument Serif", "Iowan Old Style", "Times New Roman", serif;
+  --font-sans: "Geist", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "Geist Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+
+  --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+
+  --animate-drift: drift var(--drift-duration, 14s) ease-in-out infinite;
+  --animate-rise: rise 700ms var(--ease-out-expo) both;
+
+  @keyframes drift {
+    0%, 100% { transform: translate3d(0, 0, 0); }
+    50% { transform: translate3d(10px, -22px, 0); }
+  }
+  @keyframes rise {
+    from { opacity: 0; transform: translate3d(0, 16px, 0); }
+    to { opacity: 1; transform: translate3d(0, 0, 0); }
+  }
+}
+
+@layer base {
+  html {
+    color-scheme: dark;
+    background: var(--color-ink);
+  }
+  body {
+    background: var(--color-ink);
+    color: var(--color-fg);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+  ::selection {
+    background: var(--color-accent);
+    color: var(--color-ink);
+  }
+  :focus-visible {
+    outline: 2px solid var(--color-accent);
+    outline-offset: 2px;
+  }
+  button:not(:disabled), [role="button"], select, label[for] {
+    cursor: pointer;
+  }
+  input[type="range"] {
+    accent-color: var(--color-accent);
+  }
+  ::-webkit-scrollbar { width: 8px; height: 8px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--color-line-strong); border-radius: 8px; }
+}
+
+@layer components {
+  /* Monospace micro-label used for metadata, indexes and timecode */
+  .eyebrow {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    line-height: 1.2;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--color-muted);
+  }
+
+  /* Film grain over large flat areas */
+  .grain::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    opacity: 0.06;
+    mix-blend-mode: overlay;
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+  }
+
+  /* Crop marks drawn on the four corners of the film gate */
+  .crop-marks {
+    background:
+      linear-gradient(var(--color-fg), var(--color-fg)) top left / 14px 1px no-repeat,
+      linear-gradient(var(--color-fg), var(--color-fg)) top left / 1px 14px no-repeat,
+      linear-gradient(var(--color-fg), var(--color-fg)) top right / 14px 1px no-repeat,
+      linear-gradient(var(--color-fg), var(--color-fg)) top right / 1px 14px no-repeat,
+      linear-gradient(var(--color-fg), var(--color-fg)) bottom left / 14px 1px no-repeat,
+      linear-gradient(var(--color-fg), var(--color-fg)) bottom left / 1px 14px no-repeat,
+      linear-gradient(var(--color-fg), var(--color-fg)) bottom right / 14px 1px no-repeat,
+      linear-gradient(var(--color-fg), var(--color-fg)) bottom right / 1px 14px no-repeat;
+    opacity: 0.55;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }

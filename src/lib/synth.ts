@@ -13,6 +13,7 @@ class SynthEngine {
   private padGain: GainNode | null = null;
   private arpGain: GainNode | null = null;
   private drumGain: GainNode | null = null;
+  private recordDestination: MediaStreamAudioDestinationNode | null = null;
 
   // Music parameters
   private bpm = 100;
@@ -124,6 +125,26 @@ class SynthEngine {
 
   public getAnalyser(): AnalyserNode | null {
     return this.analyser;
+  }
+
+  /**
+   * Audio stream for recording exports. It taps the instrument submixes
+   * directly, so the recording has sound even while playback is muted.
+   */
+  public getRecordingStream(): MediaStream | null {
+    this.init();
+    if (!this.ctx || !this.bassGain || !this.padGain || !this.arpGain || !this.drumGain) return null;
+    if (!this.recordDestination) {
+      const tap = this.ctx.createGain();
+      tap.gain.value = 0.45;
+      this.bassGain.connect(tap);
+      this.padGain.connect(tap);
+      this.arpGain.connect(tap);
+      this.drumGain.connect(tap);
+      this.recordDestination = this.ctx.createMediaStreamDestination();
+      tap.connect(this.recordDestination);
+    }
+    return this.recordDestination.stream;
   }
 
   public updateBpm(bpm: number) {

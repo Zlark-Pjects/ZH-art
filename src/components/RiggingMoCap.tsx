@@ -422,8 +422,8 @@ export default function RiggingMoCap() {
           ctx.save();
           ctx.translate((from.x + to.x) / 2, (from.y + to.y) / 2);
           ctx.rotate(Math.atan2(to.y - from.y, to.x - from.x));
-          ctx.fillStyle = "rgba(6, 182, 212, 0.15)";
-          ctx.strokeStyle = "rgba(6, 182, 212, 0.4)";
+          ctx.fillStyle = "rgba(255, 178, 36, 0.15)";
+          ctx.strokeStyle = "rgba(255, 178, 36, 0.4)";
           ctx.lineWidth = 1;
           ctx.beginPath();
           ctx.rect(-15, -6, 30, 12);
@@ -449,7 +449,7 @@ export default function RiggingMoCap() {
         ctx.beginPath();
         if (style === "cyberpunk") {
           // Hexagonal visor head
-          ctx.fillStyle = "rgba(6, 182, 212, 0.2)";
+          ctx.fillStyle = "rgba(255, 178, 36, 0.2)";
           ctx.strokeStyle = c1;
           ctx.lineWidth = 2;
           ctx.arc(headNode.x, headNode.y, 22, 0, Math.PI * 2);
@@ -528,7 +528,7 @@ export default function RiggingMoCap() {
           ctx.lineTo(spineNode.x + 18, spineNode.y);
           ctx.lineTo(spineNode.x - 18, spineNode.y);
           ctx.closePath();
-          ctx.fillStyle = "rgba(6, 182, 212, 0.08)";
+          ctx.fillStyle = "rgba(255, 178, 36, 0.08)";
           ctx.strokeStyle = c1;
           ctx.lineWidth = 2;
           ctx.fill();
@@ -750,19 +750,19 @@ export default function RiggingMoCap() {
     <div className="flex flex-col gap-6" id="mocap-rigging-workspace">
       
       {/* Visual Header Banner */}
-      <div className="bg-[#111112] border border-white/5 p-5 relative overflow-hidden group">
-        <div className="absolute top-0 right-0 h-16 w-16 bg-gradient-to-bl from-cyan-500/10 to-transparent pointer-events-none"></div>
+      <div className="bg-surface border border-line p-5 relative overflow-hidden group">
+        <div className="absolute top-0 right-0 h-16 w-16 bg-gradient-to-bl from-fg/[0.04] to-transparent pointer-events-none"></div>
         <div className="flex justify-between items-start md:items-center flex-col md:flex-row gap-4">
           <div>
             <div className="flex items-center gap-2 mb-1.5">
-              <span className="text-[10px] font-mono text-cyan-400">MODULE_05</span>
-              <h2 className="text-xs uppercase tracking-widest font-semibold text-white/80">Character Rigging & Motion Capture</h2>
+              <span className="text-[11px] font-mono text-fg">MODULE_05</span>
+              <h2 className="text-xs uppercase tracking-widest font-semibold text-fg/80">Character Rigging & Motion Capture</h2>
             </div>
-            <p className="text-xs text-neutral-400 max-w-xl">
+            <p className="text-xs text-muted max-w-xl">
               Animate characters procedural-ly, rig 2D skeletons, connect live camera motion tracking markers, or record sequence keyframes. Synchronized with Veo generative animation systems.
             </p>
           </div>
-          <span className="text-[9px] font-mono bg-cyan-500/10 text-cyan-400 px-2 py-1 border border-cyan-500/20 uppercase tracking-widest">
+          <span className="text-[11px] font-mono bg-fg/[0.05] text-fg px-2 py-1 border border-fg/60 uppercase tracking-widest">
             Kinetic Engine
           </span>
         </div>
@@ -775,13 +775,13 @@ export default function RiggingMoCap() {
         <div className="xl:col-span-5 flex flex-col gap-5">
           
           {/* Preset Characters */}
-          <div className="bg-[#111112] border border-white/5 p-5 flex flex-col gap-4">
+          <div className="bg-surface border border-line p-5 flex flex-col gap-4">
             <div className="flex justify-between items-center">
               <div className="flex items-center gap-2">
-                <span className="text-[10px] font-mono text-white/40">A</span>
-                <h3 className="text-xs uppercase tracking-widest font-semibold text-white/80">Select Character Asset</h3>
+                <span className="text-[11px] font-mono text-fg/40">A</span>
+                <h3 className="text-xs uppercase tracking-widest font-semibold text-fg/80">Select Character Asset</h3>
               </div>
-              <span className="text-[9px] font-mono opacity-50 uppercase">Assets</span>
+              <span className="text-[11px] font-mono opacity-50 uppercase">Assets</span>
             </div>
 
             <div className="grid grid-cols-2 gap-2">
@@ -791,14 +791,14 @@ export default function RiggingMoCap() {
                   onClick={() => setSelectedChar(c)}
                   className={`p-3 text-left border cursor-pointer rounded-xs transition-all relative overflow-hidden flex flex-col gap-1 ${
                     selectedChar.id === c.id
-                      ? "bg-cyan-950/20 text-cyan-200 border-cyan-500"
-                      : "bg-black/40 text-white/60 border-white/10 hover:border-white/20"
+                      ? "bg-fg/[0.05] text-fg border-fg/60"
+                      : "bg-black/40 text-fg/60 border-line hover:border-line-strong"
                   }`}
                 >
-                  <span className="text-[10px] font-bold uppercase tracking-wider block">{c.name}</span>
-                  <span className="text-[9px] opacity-50 line-clamp-2 leading-relaxed">{c.desc}</span>
+                  <span className="text-[11px] font-bold uppercase tracking-wider block">{c.name}</span>
+                  <span className="text-[11px] opacity-50 line-clamp-2 leading-relaxed">{c.desc}</span>
                   {selectedChar.id === c.id && (
-                    <div className="absolute top-1.5 right-1.5 w-1.5 h-1.5 bg-cyan-400 rounded-full"></div>
+                    <div className="absolute top-1.5 right-1.5 w-1.5 h-1.5 bg-accent rounded-full"></div>
                   )}
                 </button>
               ))}
@@ -806,33 +806,33 @@ export default function RiggingMoCap() {
           </div>
 
           {/* Preset Joint Positions (Quick Poses) */}
-          <div className="bg-[#111112] border border-white/5 p-5 flex flex-col gap-4">
+          <div className="bg-surface border border-line p-5 flex flex-col gap-4">
             <div className="flex justify-between items-center">
               <div className="flex items-center gap-2">
-                <span className="text-[10px] font-mono text-white/40">B</span>
-                <h3 className="text-xs uppercase tracking-widest font-semibold text-white/80">Calibration & Pose Presets</h3>
+                <span className="text-[11px] font-mono text-fg/40">B</span>
+                <h3 className="text-xs uppercase tracking-widest font-semibold text-fg/80">Calibration & Pose Presets</h3>
               </div>
-              <span className="text-[9px] font-mono opacity-50 uppercase">Calibration</span>
+              <span className="text-[11px] font-mono opacity-50 uppercase">Calibration</span>
             </div>
 
             <div className="grid grid-cols-3 gap-2">
               <button
                 onClick={() => applyPosePreset("t_pose")}
-                className="py-2.5 px-3 bg-black/40 border border-white/10 hover:border-white/20 text-[10px] font-mono font-bold uppercase text-white/80 rounded-xs text-center transition-all cursor-pointer flex items-center justify-center gap-1.5"
+                className="py-2.5 px-3 bg-black/40 border border-line hover:border-line-strong text-[11px] font-mono font-bold uppercase text-fg/80 rounded-xs text-center transition-all cursor-pointer flex items-center justify-center gap-1.5"
               >
                 <Layers className="w-3.5 h-3.5" />
                 T-Pose (Rest)
               </button>
               <button
                 onClick={() => applyPosePreset("action")}
-                className="py-2.5 px-3 bg-black/40 border border-white/10 hover:border-white/20 text-[10px] font-mono font-bold uppercase text-white/80 rounded-xs text-center transition-all cursor-pointer flex items-center justify-center gap-1.5"
+                className="py-2.5 px-3 bg-black/40 border border-line hover:border-line-strong text-[11px] font-mono font-bold uppercase text-fg/80 rounded-xs text-center transition-all cursor-pointer flex items-center justify-center gap-1.5"
               >
                 <Sparkles className="w-3.5 h-3.5" />
                 Combat Pose
               </button>
               <button
                 onClick={() => applyPosePreset("crouch")}
-                className="py-2.5 px-3 bg-black/40 border border-white/10 hover:border-white/20 text-[10px] font-mono font-bold uppercase text-white/80 rounded-xs text-center transition-all cursor-pointer flex items-center justify-center gap-1.5"
+                className="py-2.5 px-3 bg-black/40 border border-line hover:border-line-strong text-[11px] font-mono font-bold uppercase text-fg/80 rounded-xs text-center transition-all cursor-pointer flex items-center justify-center gap-1.5"
               >
                 <Undo className="w-3.5 h-3.5" />
                 Crouch
@@ -841,13 +841,13 @@ export default function RiggingMoCap() {
           </div>
 
           {/* Procedural MoCap Motion Streams */}
-          <div className="bg-[#111112] border border-white/5 p-5 flex flex-col gap-4">
+          <div className="bg-surface border border-line p-5 flex flex-col gap-4">
             <div className="flex justify-between items-center">
               <div className="flex items-center gap-2">
-                <span className="text-[10px] font-mono text-white/40">C</span>
-                <h3 className="text-xs uppercase tracking-widest font-semibold text-white/80">Procedural Motion presets</h3>
+                <span className="text-[11px] font-mono text-fg/40">C</span>
+                <h3 className="text-xs uppercase tracking-widest font-semibold text-fg/80">Procedural Motion presets</h3>
               </div>
-              <span className="text-[9px] font-mono opacity-50 uppercase">Library</span>
+              <span className="text-[11px] font-mono opacity-50 uppercase">Library</span>
             </div>
 
             <div className="flex flex-col gap-2">
@@ -860,15 +860,15 @@ export default function RiggingMoCap() {
                   }}
                   className={`p-2.5 text-left border cursor-pointer rounded-xs transition-all relative overflow-hidden flex items-center justify-between gap-3 ${
                     activeMotion === m.id
-                      ? "bg-cyan-950/20 text-cyan-200 border-cyan-500/60"
-                      : "bg-black/40 text-white/60 border-white/10 hover:border-white/20"
+                      ? "bg-fg/[0.05] text-fg border-fg/60"
+                      : "bg-black/40 text-fg/60 border-line hover:border-line-strong"
                   }`}
                 >
                   <div className="flex flex-col">
-                    <span className="text-[10px] font-bold uppercase tracking-wider block">{m.name}</span>
-                    <span className="text-[9px] opacity-50 line-clamp-1">{m.description}</span>
+                    <span className="text-[11px] font-bold uppercase tracking-wider block">{m.name}</span>
+                    <span className="text-[11px] opacity-50 line-clamp-1">{m.description}</span>
                   </div>
-                  <span className="text-[8px] font-mono px-1.5 py-0.5 rounded-sm bg-white/5 uppercase shrink-0 text-white/60">
+                  <span className="text-[11px] font-mono px-1.5 py-0.5 rounded-sm bg-fg/5 uppercase shrink-0 text-fg/60">
                     {m.vibe}
                   </span>
                 </button>
@@ -877,9 +877,9 @@ export default function RiggingMoCap() {
 
             {/* Speed & Intensity sliders */}
             {activeMotion && (
-              <div className="mt-2 pt-3 border-t border-white/5 flex flex-col gap-3">
+              <div className="mt-2 pt-3 border-t border-line flex flex-col gap-3">
                 <div className="flex flex-col gap-1.5">
-                  <div className="flex justify-between text-[9px] uppercase font-mono tracking-wider opacity-60">
+                  <div className="flex justify-between text-[11px] uppercase font-mono tracking-wider opacity-60">
                     <span>Motion Speed Cycle</span>
                     <span>{motionSpeed.toFixed(1)}x</span>
                   </div>
@@ -890,12 +890,12 @@ export default function RiggingMoCap() {
                     step="0.1"
                     value={motionSpeed}
                     onChange={(e) => setMotionSpeed(parseFloat(e.target.value))}
-                    className="w-full h-1 bg-white/10 rounded-sm appearance-none outline-none accent-cyan-500"
+                    className="w-full h-1 bg-fg/10 rounded-sm appearance-none outline-none accent-accent"
                   />
                 </div>
 
                 <div className="flex flex-col gap-1.5">
-                  <div className="flex justify-between text-[9px] uppercase font-mono tracking-wider opacity-60">
+                  <div className="flex justify-between text-[11px] uppercase font-mono tracking-wider opacity-60">
                     <span>Joint Displacement Intensity</span>
                     <span>{motionIntensity.toFixed(1)}x</span>
                   </div>
@@ -906,7 +906,7 @@ export default function RiggingMoCap() {
                     step="0.1"
                     value={motionIntensity}
                     onChange={(e) => setMotionIntensity(parseFloat(e.target.value))}
-                    className="w-full h-1 bg-white/10 rounded-sm appearance-none outline-none accent-cyan-500"
+                    className="w-full h-1 bg-fg/10 rounded-sm appearance-none outline-none accent-accent"
                   />
                 </div>
               </div>
@@ -914,30 +914,30 @@ export default function RiggingMoCap() {
           </div>
 
           {/* Timeline & Keyframing */}
-          <div className="bg-[#111112] border border-white/5 p-5 flex flex-col gap-4">
+          <div className="bg-surface border border-line p-5 flex flex-col gap-4">
             <div className="flex justify-between items-center">
               <div className="flex items-center gap-2">
-                <span className="text-[10px] font-mono text-white/40">D</span>
-                <h3 className="text-xs uppercase tracking-widest font-semibold text-white/80">Kinetic Timeline / Keyframes</h3>
+                <span className="text-[11px] font-mono text-fg/40">D</span>
+                <h3 className="text-xs uppercase tracking-widest font-semibold text-fg/80">Kinetic Timeline / Keyframes</h3>
               </div>
-              <span className="text-[9px] font-mono text-cyan-400 uppercase">Local Record</span>
+              <span className="text-[11px] font-mono text-fg uppercase">Local Record</span>
             </div>
 
             <div className="flex gap-2">
               <button
                 onClick={addKeyframe}
-                className="flex-1 py-2 bg-black/50 hover:bg-black/80 border border-white/10 text-[10px] font-mono font-bold uppercase tracking-wider text-white rounded-xs cursor-pointer flex items-center justify-center gap-1.5"
+                className="flex-1 py-2 bg-black/50 hover:bg-black/80 border border-line text-[11px] font-mono font-bold uppercase tracking-wider text-fg rounded-xs cursor-pointer flex items-center justify-center gap-1.5"
               >
-                <Plus className="w-3.5 h-3.5 text-cyan-400" />
+                <Plus className="w-3.5 h-3.5 text-fg" />
                 Add Keyframe
               </button>
               {keyframes.length > 0 && (
                 <button
                   onClick={() => setIsPlayingTimeline(!isPlayingTimeline)}
-                  className={`px-4 py-2 border text-[10px] font-mono font-bold uppercase rounded-xs cursor-pointer flex items-center justify-center gap-1.5 transition-all ${
+                  className={`px-4 py-2 border text-[11px] font-mono font-bold uppercase rounded-xs cursor-pointer flex items-center justify-center gap-1.5 transition-all ${
                     isPlayingTimeline 
-                      ? "bg-amber-500 text-black border-amber-500" 
-                      : "bg-cyan-600 text-white border-cyan-600"
+                      ? "bg-accent text-ink border-fg/60" 
+                      : "bg-accent text-fg border-fg/60"
                   }`}
                 >
                   {isPlayingTimeline ? <Pause className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5" />}
@@ -947,7 +947,7 @@ export default function RiggingMoCap() {
               {keyframes.length > 0 && (
                 <button
                   onClick={clearTimeline}
-                  className="px-3.5 py-2 bg-black/40 hover:bg-rose-950/20 border border-white/10 hover:border-rose-500/30 text-[10px] font-mono text-neutral-400 hover:text-rose-300 rounded-xs cursor-pointer"
+                  className="px-3.5 py-2 bg-black/40 hover:bg-danger/10 border border-line hover:border-danger/30 text-[11px] font-mono text-muted hover:text-danger rounded-xs cursor-pointer"
                   title="Clear Timeline"
                 >
                   <Trash className="w-3.5 h-3.5" />
@@ -957,7 +957,7 @@ export default function RiggingMoCap() {
 
             {keyframes.length > 0 && (
               <div className="flex flex-col gap-2">
-                <div className="text-[9px] font-mono uppercase text-white/40 flex justify-between">
+                <div className="text-[11px] font-mono uppercase text-fg/40 flex justify-between">
                   <span>Recorded Frames ({keyframes.length})</span>
                   <span>Active Frame: {currentFrameIndex + 1}</span>
                 </div>
@@ -967,17 +967,17 @@ export default function RiggingMoCap() {
                       key={kf.id}
                       className={`h-11 w-11 shrink-0 border rounded-xs flex flex-col items-center justify-center relative group select-none transition-all ${
                         currentFrameIndex === idx 
-                          ? "bg-cyan-950/20 border-cyan-500 text-cyan-200" 
-                          : "bg-black/60 border-white/10 text-white/40"
+                          ? "bg-fg/[0.05] border-fg/60 text-fg" 
+                          : "bg-black/60 border-line text-fg/40"
                       }`}
                     >
-                      <span className="text-[9px] font-mono font-bold">F{idx+1}</span>
+                      <span className="text-[11px] font-mono font-bold">F{idx+1}</span>
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
                           removeKeyframe(kf.id);
                         }}
-                        className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-rose-600 hover:bg-rose-700 text-white text-[8px] flex items-center justify-center rounded-full opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer shadow-md"
+                        className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-danger hover:bg-danger text-fg text-[11px] flex items-center justify-center rounded-full opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer shadow-md"
                       >
                         ×
                       </button>
@@ -994,7 +994,7 @@ export default function RiggingMoCap() {
         <div className="xl:col-span-7 flex flex-col gap-5">
           
           {/* Interactive Joint Editor Canvas Container */}
-          <div className="relative aspect-[4/5] md:aspect-video xl:aspect-square w-full bg-[#121214] border border-white/5 overflow-hidden group shadow-2xl flex flex-col">
+          <div className="relative aspect-[4/5] md:aspect-video xl:aspect-square w-full bg-surface border border-line overflow-hidden group shadow-2xl flex flex-col">
             
             {/* Live Render Canvas */}
             <div className="absolute inset-0 flex items-center justify-center bg-black/60">
@@ -1012,8 +1012,8 @@ export default function RiggingMoCap() {
 
             {/* Floating Live Camera Picture-In-Picture Overlay */}
             {cameraActive && (
-              <div className="absolute bottom-4 left-4 w-32 md:w-44 bg-black/90 border border-cyan-500/30 rounded-sm overflow-hidden shadow-2xl flex flex-col z-20">
-                <div className="relative w-full aspect-[4/3] bg-neutral-900 overflow-hidden">
+              <div className="absolute bottom-4 left-4 w-32 md:w-44 bg-black/90 border border-fg/60 rounded-sm overflow-hidden shadow-2xl flex flex-col z-20">
+                <div className="relative w-full aspect-[4/3] bg-surface overflow-hidden">
                   <video
                     ref={videoRef}
                     autoPlay
@@ -1023,21 +1023,21 @@ export default function RiggingMoCap() {
                   />
                   {/* High Tech skeletal mock overlay on face stream */}
                   <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
-                    <div className="absolute w-12 h-12 border border-emerald-500/40 rounded-full animate-pulse flex items-center justify-center">
-                      <div className="w-1.5 h-1.5 bg-emerald-400 rounded-full"></div>
+                    <div className="absolute w-12 h-12 border border-ok/40 rounded-full animate-pulse flex items-center justify-center">
+                      <div className="w-1.5 h-1.5 bg-ok rounded-full"></div>
                     </div>
                     {/* Secondary tracking points */}
-                    <span className="absolute top-4 left-6 w-1 h-1 bg-cyan-400 rounded-full animate-ping"></span>
-                    <span className="absolute top-4 right-6 w-1 h-1 bg-cyan-400 rounded-full animate-ping"></span>
-                    <span className="absolute bottom-6 left-12 w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse"></span>
+                    <span className="absolute top-4 left-6 w-1 h-1 bg-accent rounded-full animate-ping"></span>
+                    <span className="absolute top-4 right-6 w-1 h-1 bg-accent rounded-full animate-ping"></span>
+                    <span className="absolute bottom-6 left-12 w-1.5 h-1.5 bg-ok rounded-full animate-pulse"></span>
                   </div>
                 </div>
-                <div className="py-1 px-2 flex justify-between items-center text-[8px] font-mono bg-black border-t border-white/5">
-                  <span className="text-emerald-400 uppercase tracking-wider animate-pulse">● TRACKING_ACTIVE</span>
+                <div className="py-1 px-2 flex justify-between items-center text-[11px] font-mono bg-black border-t border-line">
+                  <span className="text-ok uppercase tracking-wider animate-pulse">● TRACKING_ACTIVE</span>
                   <button 
                     onClick={() => setCameraTracking(!cameraTracking)}
                     className={`px-1.5 py-0.5 rounded-sm uppercase ${
-                      cameraTracking ? "bg-cyan-500/10 text-cyan-400 border border-cyan-500/20" : "bg-neutral-800 text-neutral-400"
+                      cameraTracking ? "bg-fg/[0.05] text-fg border border-fg/60" : "bg-raised text-muted"
                     }`}
                   >
                     {cameraTracking ? "Sync" : "Mute"}
@@ -1048,16 +1048,16 @@ export default function RiggingMoCap() {
 
             {/* Absolute HUD Top bar overlay */}
             <div className="absolute top-4 left-4 right-4 flex justify-between items-center pointer-events-none z-10">
-              <span className="bg-black/80 px-2.5 py-1 text-[9px] font-mono text-cyan-400 uppercase tracking-widest border border-cyan-500/20 rounded-sm">
+              <span className="bg-black/80 px-2.5 py-1 text-[11px] font-mono text-fg uppercase tracking-widest border border-fg/60 rounded-sm">
                 ● RIGGING HUD / CALIBRATION CANVAS
               </span>
               <div className="flex gap-2 pointer-events-auto">
                 <button
                   onClick={toggleCamera}
-                  className={`px-3 py-1 text-[9px] font-mono uppercase rounded-sm border transition-all cursor-pointer flex items-center gap-1.5 ${
+                  className={`px-3 py-1 text-[11px] font-mono uppercase rounded-sm border transition-all cursor-pointer flex items-center gap-1.5 ${
                     cameraActive 
-                      ? "bg-rose-950/20 text-rose-300 border-rose-500/30" 
-                      : "bg-cyan-950/20 text-cyan-400 border-cyan-500/30 hover:border-cyan-500/50"
+                      ? "bg-danger/10 text-danger border-danger/30" 
+                      : "bg-fg/[0.05] text-fg border-fg/60 hover:border-fg/60"
                   }`}
                 >
                   <Camera className="w-3.5 h-3.5" />
@@ -1067,43 +1067,43 @@ export default function RiggingMoCap() {
             </div>
 
             {/* Hover Tooltip or Guidance */}
-            <div className="absolute bottom-4 right-4 pointer-events-none z-10 bg-black/80 p-2.5 border border-white/5 max-w-[200px] text-[9px] leading-normal font-mono text-neutral-400">
-              <span className="text-white font-bold block uppercase mb-0.5 text-[10px]">IK/FK Editor</span>
+            <div className="absolute bottom-4 right-4 pointer-events-none z-10 bg-black/80 p-2.5 border border-line max-w-[200px] text-[11px] leading-normal font-mono text-muted">
+              <span className="text-fg font-bold block uppercase mb-0.5 text-[11px]">IK/FK Editor</span>
               Click and drag joint node markers to manipulate limb configurations.
             </div>
           </div>
 
           {/* Webcam Access Error messaging */}
           {cameraError && (
-            <div className="bg-rose-950/20 border border-rose-500/30 p-3.5 rounded-xs flex items-start gap-3 text-rose-200 text-xs">
-              <AlertCircle className="w-5 h-5 text-rose-400 shrink-0" />
+            <div className="bg-danger/10 border border-danger/30 p-3.5 rounded-xs flex items-start gap-3 text-danger text-xs">
+              <AlertCircle className="w-5 h-5 text-danger shrink-0" />
               <div>
                 <span className="font-bold uppercase tracking-wider block mb-0.5">Camera Error</span>
-                <p className="leading-relaxed text-rose-200/80">{cameraError}</p>
+                <p className="leading-relaxed text-danger/80">{cameraError}</p>
               </div>
             </div>
           )}
 
           {/* Veo Output / Render Control Section */}
-          <div className="bg-[#111112] border border-white/5 p-5 flex flex-col gap-4">
+          <div className="bg-surface border border-line p-5 flex flex-col gap-4">
             <div className="flex justify-between items-center">
               <div className="flex items-center gap-2">
-                <span className="text-[10px] font-mono text-white/40">E</span>
-                <h3 className="text-xs uppercase tracking-widest font-semibold text-white/80">Generative MoCap Video Synthesis</h3>
+                <span className="text-[11px] font-mono text-fg/40">E</span>
+                <h3 className="text-xs uppercase tracking-widest font-semibold text-fg/80">Generative MoCap Video Synthesis</h3>
               </div>
-              <span className="text-[9px] font-mono text-cyan-400 px-1.5 py-0.5 border border-cyan-500/10 uppercase">
+              <span className="text-[11px] font-mono text-fg px-1.5 py-0.5 border border-fg/60 uppercase">
                 Veo-3.1 Pipeline
               </span>
             </div>
 
-            <p className="text-xs text-neutral-400 leading-relaxed">
+            <p className="text-xs text-muted leading-relaxed">
               Export your custom skeletal proportions and keyframe sequences straight into the high-fidelity Veo video generation pipeline. This renders a finished animation sequence featuring your selected character style.
             </p>
 
             {renderStatus !== "idle" && (
-              <div className="bg-black/40 border border-white/10 p-4 rounded-sm flex flex-col gap-3">
-                <div className="flex justify-between items-center text-[10px] font-mono">
-                  <span className="uppercase text-cyan-400 flex items-center gap-1.5 animate-pulse">
+              <div className="bg-black/40 border border-line p-4 rounded-sm flex flex-col gap-3">
+                <div className="flex justify-between items-center text-[11px] font-mono">
+                  <span className="uppercase text-fg flex items-center gap-1.5 animate-pulse">
                     <RefreshCw className="w-3.5 h-3.5 animate-spin" />
                     {renderStatus === "rendering" && "Synthesizing Skeletal Motion Video..."}
                     {renderStatus === "completed" && "Veo Render Completed Successfully!"}
@@ -1112,15 +1112,15 @@ export default function RiggingMoCap() {
                   <span>{renderProgress}%</span>
                 </div>
 
-                <div className="w-full bg-white/5 h-1 rounded-full overflow-hidden">
+                <div className="w-full bg-fg/5 h-1 rounded-full overflow-hidden">
                   <div
                     style={{ width: `${renderProgress}%` }}
-                    className="bg-cyan-500 h-full transition-all duration-1000"
+                    className="bg-accent h-full transition-all duration-1000"
                   ></div>
                 </div>
 
                 {renderError && (
-                  <p className="text-[10px] font-mono text-rose-400 leading-normal">
+                  <p className="text-[11px] font-mono text-danger leading-normal">
                     {renderError}
                   </p>
                 )}
@@ -1132,7 +1132,7 @@ export default function RiggingMoCap() {
                       controls
                       autoPlay
                       loop
-                      className="w-full aspect-video bg-black border border-white/10"
+                      className="w-full aspect-video bg-black border border-line"
                     />
                     <div className="flex justify-end">
                       <button
@@ -1142,7 +1142,7 @@ export default function RiggingMoCap() {
                           a.download = `ZH-mocap-video-${Date.now()}.mp4`;
                           a.click();
                         }}
-                        className="px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-black text-[10px] font-bold font-mono uppercase rounded-xs transition-all flex items-center gap-1.5 cursor-pointer shadow-md"
+                        className="px-4 py-2 bg-ok hover:bg-ok text-ink text-[11px] font-bold font-mono uppercase rounded-xs transition-all flex items-center gap-1.5 cursor-pointer shadow-md"
                       >
                         <Download className="w-3.5 h-3.5" />
                         Download Rendered Animation
@@ -1156,9 +1156,9 @@ export default function RiggingMoCap() {
             {renderStatus !== "rendering" && (
               <button
                 onClick={handleRenderVeoMotion}
-                className="w-full py-3.5 bg-gradient-to-r from-cyan-600 to-indigo-600 hover:from-cyan-700 hover:to-indigo-700 text-white font-bold uppercase tracking-[0.2em] text-xs transition-all cursor-pointer flex items-center justify-center gap-2 relative shadow-lg active:scale-[0.99]"
+                className="w-full py-3.5 bg-gradient-to-r from-accent to-accent hover:from-accent hover:to-accent text-fg font-bold uppercase tracking-[0.2em] text-xs transition-all cursor-pointer flex items-center justify-center gap-2 relative shadow-lg active:scale-[0.99]"
               >
-                <Video className="w-4 h-4 text-white animate-pulse" />
+                <Video className="w-4 h-4 text-fg animate-pulse" />
                 <span>Render Character Video with Veo</span>
               </button>
             )}

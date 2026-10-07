@@ -9,7 +9,7 @@ import type { Request, Response, NextFunction } from "express";
 dotenv.config();
 
 const app = express();
-const PORT = 3000;
+const PORT = Number(process.env.PORT) || 3000;
 
 // Behind Cloud Run / a reverse proxy, req.ip should be the client address
 app.set("trust proxy", 1);
@@ -20,9 +20,11 @@ app.use(express.json({ limit: "1mb" }));
 
 // Simple in-memory per-IP rate limiter. Every AI endpoint spends the server's
 // API keys, so cap how often a single client can call them.
-function rateLimit(max: number, windowMs: number) {
+function rateLimit(max: number, windowMs: number, spendsQuota: (req: Request) => boolean) {
   const hits = new Map<string, { count: number; resetAt: number }>();
   return (req: Request, res: Response, next: NextFunction) => {
+    // Only count requests that will actually spend API quota
+    if (!spendsQuota(req)) return next();
     const now = Date.now();
     if (hits.size > 10_000) {
       for (const [key, entry] of hits) if (entry.resetAt <= now) hits.delete(key);
@@ -42,8 +44,11 @@ function rateLimit(max: number, windowMs: number) {
   };
 }
 
-const aiLimiter = rateLimit(Number(process.env.AI_RATE_LIMIT) || 30, 10 * 60 * 1000);
-const videoLimiter = rateLimit(Number(process.env.VIDEO_RATE_LIMIT) || 5, 60 * 60 * 1000);
+const spendsGemini = (req: Request) => !req.body?.skipAI && hasGeminiKey();
+const spendsHf = () => Boolean(process.env.HF_TOKEN) && process.env.HF_TOKEN !== "MY_HF_TOKEN";
+const aiLimiter = rateLimit(Number(process.env.AI_RATE_LIMIT) || 30, 10 * 60 * 1000, spendsGemini);
+const hfLimiter = rateLimit(Number(process.env.AI_RATE_LIMIT) || 30, 10 * 60 * 1000, spendsHf);
+const videoLimiter = rateLimit(Number(process.env.VIDEO_RATE_LIMIT) || 5, 60 * 60 * 1000, spendsGemini);
 
 const HF_MODELS = new Set([
   "black-forest-labs/FLUX.1-schnell",
@@ -166,6 +171,15 @@ async function generateWithRetryAndFallback(options: {
 
   throw lastError || new Error(`All generation attempts failed for ${label}`);
 }
+
+// Which integrations are configured, so the UI can say when it runs in demo mode
+app.get("/api/health", (_req, res) => {
+  const hfToken = process.env.HF_TOKEN;
+  res.json({
+    gemini: hasGeminiKey(),
+    huggingFace: Boolean(hfToken) && hfToken !== "MY_HF_TOKEN",
+  });
+});
 
 // 1. STORYBOARD GENERATION ENDPOINT (Cooperative Multi-Model Production Crew)
 app.post("/api/generate-storyboard", aiLimiter, async (req, res) => {
@@ -473,7 +487,7 @@ app.post("/api/generate-image", aiLimiter, async (req, res) => {
 });
 
 // 2.5 HUGGING FACE INFERENCE API ENDPOINT
-app.post("/api/generate-hf", aiLimiter, async (req, res) => {
+app.post("/api/generate-hf", hfLimiter, async (req, res) => {
   try {
     const { prompt, modelId } = req.body;
     const hfToken = process.env.HF_TOKEN;

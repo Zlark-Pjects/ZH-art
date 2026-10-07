@@ -373,7 +373,7 @@ export default function CreativeSuite() {
       particles[i].y = Math.random() * height;
     }
 
-    const glyphs = ["0", "1", "Ξ", "Ψ", "Φ", "Ω", "⚡", "⌁", "⚛", "◆", "◇", "⧉"];
+    const glyphs = ["0", "1", "Ξ", "Ψ", "Φ", "Ω", "", "⌁", "⚛", "◆", "◇", "⧉"];
 
     const render = () => {
       ctx.clearRect(0, 0, width, height);
@@ -615,30 +615,30 @@ export default function CreativeSuite() {
   };
 
   return (
-    <div id="creative-suite-workspace" className="bg-[#0b0b0c] border border-white/5 rounded-sm p-4 lg:p-6 text-white flex flex-col gap-8">
+    <div id="creative-suite-workspace" className="bg-[#0b0b0c] border border-line rounded-sm p-4 lg:p-6 text-fg flex flex-col gap-8">
       {/* Workspace Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between border-b border-white/5 pb-5 gap-4">
+      <div className="flex flex-col md:flex-row md:items-center justify-between border-b border-line pb-5 gap-4">
         <div className="flex items-center gap-3">
-          <div className="p-2.5 bg-gradient-to-br from-cyan-500 to-purple-600 text-black font-extrabold rounded-sm shadow-md shadow-cyan-500/10">
+          <div className="p-2.5 bg-gradient-to-br from-accent to-accent text-ink font-extrabold rounded-sm shadow-md">
             <Palette className="w-5 h-5" />
           </div>
           <div>
-            <span className="text-[9px] font-mono tracking-widest text-cyan-400 font-bold uppercase">Active Workshop Module</span>
-            <h1 className="text-xl md:text-2xl font-serif font-medium tracking-tight mt-0.5 text-neutral-100">Creative &amp; Artistic Studio</h1>
+            <span className="text-[11px] font-mono tracking-widest text-fg font-bold uppercase">Active Workshop Module</span>
+            <h1 className="text-xl md:text-2xl font-serif font-medium tracking-tight mt-0.5 text-fg">Creative &amp; Artistic Studio</h1>
           </div>
         </div>
-        <p className="text-xs text-white/50 max-w-md font-sans leading-relaxed">
+        <p className="text-xs text-fg/50 max-w-md font-sans leading-relaxed">
           Configure real-time scene flow, fine-tune facial gestures to sync with emotional dialogue subtext, customize secondary assets, and inject atmospheric VFX particles and light layers.
         </p>
       </div>
 
       {statusMsg && (
-        <div className="p-3.5 bg-[#121217] border border-cyan-500/20 text-cyan-400 text-xs font-mono rounded-sm flex items-center justify-between shadow-lg">
+        <div className="p-3.5 bg-[#121217] border border-fg/60 text-fg text-xs font-mono rounded-sm flex items-center justify-between shadow-lg">
           <div className="flex items-center gap-2">
-            <span className="h-1.5 w-1.5 bg-cyan-400 rounded-full animate-ping"></span>
+            <span className="h-1.5 w-1.5 bg-accent rounded-full animate-ping"></span>
             <span>{statusMsg}</span>
           </div>
-          <button onClick={() => setStatusMsg("")} className="text-white/40 hover:text-white">&times;</button>
+          <button onClick={() => setStatusMsg("")} className="text-fg/40 hover:text-fg">&times;</button>
         </div>
       )}
 
@@ -649,37 +649,37 @@ export default function CreativeSuite() {
         <div className="col-span-12 xl:col-span-7 flex flex-col gap-6">
 
           {/* BLOCK 1: Storyboarding Assistance */}
-          <div className="bg-[#111112] border border-white/5 p-5 rounded-sm relative overflow-hidden flex flex-col gap-4">
-            <div className="absolute top-0 right-0 h-16 w-16 bg-gradient-to-bl from-white/5 to-transparent pointer-events-none"></div>
+          <div className="bg-surface border border-line p-5 rounded-sm relative overflow-hidden flex flex-col gap-4">
+            <div className="absolute top-0 right-0 h-16 w-16 bg-gradient-to-bl from-fg/5 to-transparent pointer-events-none"></div>
             <div className="flex justify-between items-center">
               <div className="flex items-center gap-2">
-                <span className="text-[10px] font-mono text-cyan-400">01</span>
-                <h2 className="text-xs uppercase tracking-widest font-semibold text-white/80">Storyboarding Assistance</h2>
+                <span className="text-[11px] font-mono text-fg">01</span>
+                <h2 className="text-xs uppercase tracking-widest font-semibold text-fg/80">Storyboarding Assistance</h2>
               </div>
-              <span className="text-[9px] font-mono bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 px-2 py-0.5 rounded-sm">AI Layout Director</span>
+              <span className="text-[11px] font-mono bg-fg/[0.05] text-fg border border-fg/60 px-2 py-0.5 rounded-sm">AI Layout Director</span>
             </div>
 
             <div className="flex flex-col gap-1.5">
-              <label className="text-[10px] uppercase font-bold text-white/40 tracking-wider">Describe your narrative sequence idea</label>
+              <label className="text-[11px] uppercase font-bold text-fg/40 tracking-wider">Describe your narrative sequence idea</label>
               <textarea
                 value={sequencePrompt}
                 onChange={(e) => setSequencePrompt(e.target.value)}
                 rows={2}
                 placeholder="Describe your story arc, cinematic vision, or specific scene sequence..."
-                className="w-full bg-[#080809] border border-white/10 rounded-sm p-3 font-serif italic text-sm text-neutral-200 focus:border-cyan-500 focus:outline-none focus:ring-1 focus:ring-cyan-500 transition-colors"
+                className="w-full bg-ink border border-line rounded-sm p-3 font-serif italic text-sm text-fg focus:border-fg/60 focus:outline-none focus:ring-1 focus:ring-fg/40 transition-colors"
               />
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="flex flex-col gap-1.5">
-                <label className="text-[10px] uppercase font-bold text-white/40 tracking-wider">Cinematic Style Preset</label>
+                <label className="text-[11px] uppercase font-bold text-fg/40 tracking-wider">Cinematic Style Preset</label>
                 <select
                   value={selectedStyle}
                   onChange={(e) => {
                     setSelectedStyle(e.target.value);
                     setBackdrop(e.target.value === "anime" ? "forest" : e.target.value === "cyberpunk" ? "neon" : "observatory");
                   }}
-                  className="bg-[#080809] border border-white/10 rounded-sm p-2 text-xs text-white/80 focus:border-cyan-500 focus:outline-none"
+                  className="bg-ink border border-line rounded-sm p-2 text-xs text-fg/80 focus:border-fg/60 focus:outline-none"
                 >
                   <option value="cinema">Epic Cinematic</option>
                   <option value="cyberpunk">Neon Cyberpunk</option>
@@ -694,7 +694,7 @@ export default function CreativeSuite() {
                 <button
                   onClick={consultAIDirector}
                   disabled={isGeneratingSuggestions}
-                  className="w-full bg-cyan-500 hover:bg-cyan-400 active:bg-cyan-600 disabled:bg-neutral-800 disabled:text-neutral-500 text-black font-extrabold text-[11px] uppercase tracking-wider py-3.5 px-4 rounded-xs flex items-center justify-center gap-2 transition-all shadow-md shadow-cyan-500/5 cursor-pointer"
+                  className="w-full bg-accent hover:bg-accent active:bg-accent disabled:bg-raised disabled:text-muted text-ink font-extrabold text-[11px] uppercase tracking-wider py-3.5 px-4 rounded-xs flex items-center justify-center gap-2 transition-all shadow-md cursor-pointer"
                 >
                   {isGeneratingSuggestions ? (
                     <>
@@ -703,7 +703,7 @@ export default function CreativeSuite() {
                     </>
                   ) : (
                     <>
-                      <Sparkles className="w-3.5 h-3.5 text-black" />
+                      <Sparkles className="w-3.5 h-3.5 text-ink" />
                       <span>Consult AI Director Chloe</span>
                     </>
                   )}
@@ -713,23 +713,23 @@ export default function CreativeSuite() {
 
             {/* AI Suggestion Output (Grounded Content Display) */}
             {suggestionsResult && (
-              <div className="mt-4 border-t border-white/5 pt-4 flex flex-col gap-4">
-                <div className="p-3 bg-neutral-900/50 border border-white/5 rounded-xs">
-                  <p className="text-[11px] font-mono text-cyan-400/80 mb-1">
+              <div className="mt-4 border-t border-line pt-4 flex flex-col gap-4">
+                <div className="p-3 bg-surface border border-line rounded-xs">
+                  <p className="text-[11px] font-mono text-fg mb-1">
                     <span className="font-bold">GEN-AI ASSESSMENT //</span> EST. EMOTIONAL ARC
                   </p>
-                  <p className="text-xs font-serif italic text-white/70 leading-relaxed mb-2">
+                  <p className="text-xs font-serif italic text-fg/70 leading-relaxed mb-2">
                     &ldquo;{suggestionsResult.emotionalArc}&rdquo;
                   </p>
-                  <div className="flex items-center gap-1 text-[10px] text-white/40">
+                  <div className="flex items-center gap-1 text-[11px] text-fg/40">
                     <span className="font-mono uppercase">Vibe preset:</span>
-                    <span className="text-white/60 font-medium font-mono">{suggestionsResult.cinematicVibe}</span>
+                    <span className="text-fg/60 font-medium font-mono">{suggestionsResult.cinematicVibe}</span>
                   </div>
                 </div>
 
                 <div className="flex flex-col gap-3">
-                  <div className="flex items-center gap-2 text-[10px] uppercase tracking-wider text-white/50 font-bold">
-                    <Layers className="w-3 h-3 text-cyan-400" />
+                  <div className="flex items-center gap-2 text-[11px] uppercase tracking-wider text-fg/50 font-bold">
+                    <Layers className="w-3 h-3 text-fg" />
                     <span>Suggested Scene-by-Scene Flow &amp; Angles</span>
                   </div>
 
@@ -737,30 +737,30 @@ export default function CreativeSuite() {
                     {suggestionsResult.suggestions.map((s, idx) => (
                       <div
                         key={idx}
-                        className="p-3.5 bg-[#080809] border border-white/5 hover:border-cyan-500/20 rounded-sm flex flex-col gap-2 transition-all group/card relative"
+                        className="p-3.5 bg-ink border border-line hover:border-fg/60 rounded-sm flex flex-col gap-2 transition-all group/card relative"
                       >
-                        <div className="absolute top-2 right-2 text-[9px] font-mono text-white/20 font-bold">
+                        <div className="absolute top-2 right-2 text-[11px] font-mono text-fg/20 font-bold">
                           CH. {s.sceneNumber}
                         </div>
-                        <h4 className="text-[11px] font-bold text-neutral-100 pr-6 uppercase tracking-wider truncate">
+                        <h4 className="text-[11px] font-bold text-fg pr-6 uppercase tracking-wider truncate">
                           {s.title}
                         </h4>
                         
-                        <p className="text-[10px] text-white/60 line-clamp-3 font-serif leading-relaxed italic border-l border-white/10 pl-2">
+                        <p className="text-[11px] text-fg/60 line-clamp-3 font-serif leading-relaxed italic border-l border-line pl-2">
                           &ldquo;{s.flowDescription}&rdquo;
                         </p>
 
-                        <div className="mt-1 flex flex-col gap-1.5 text-[9px]">
-                          <div className="bg-cyan-950/20 p-1.5 rounded-xs border border-cyan-900/10">
-                            <span className="text-cyan-400 font-mono font-bold block">🎥 ANGLE &amp; FOCUS:</span>
-                            <span className="text-white/80 font-serif leading-tight mt-0.5 block">{s.cameraAngle}</span>
-                            <span className="text-white/40 leading-tight mt-1 block">{s.cameraReason}</span>
+                        <div className="mt-1 flex flex-col gap-1.5 text-[11px]">
+                          <div className="bg-fg/[0.05] p-1.5 rounded-xs border border-fg/60">
+                            <span className="text-fg font-mono font-bold block">ANGLE &amp; FOCUS:</span>
+                            <span className="text-fg/80 font-serif leading-tight mt-0.5 block">{s.cameraAngle}</span>
+                            <span className="text-fg/40 leading-tight mt-1 block">{s.cameraReason}</span>
                           </div>
 
-                          <div className="bg-purple-950/20 p-1.5 rounded-xs border border-purple-900/10">
-                            <span className="text-purple-400 font-mono font-bold block">⚡ TRANSITION:</span>
-                            <span className="text-white/80 font-serif leading-tight mt-0.5 block">{s.transitionType}</span>
-                            <span className="text-white/40 leading-tight mt-1 block">{s.transitionReason}</span>
+                          <div className="bg-fg/[0.05] p-1.5 rounded-xs border border-fg/60">
+                            <span className="text-fg font-mono font-bold block">TRANSITION:</span>
+                            <span className="text-fg/80 font-serif leading-tight mt-0.5 block">{s.transitionType}</span>
+                            <span className="text-fg/40 leading-tight mt-1 block">{s.transitionReason}</span>
                           </div>
                         </div>
 
@@ -771,7 +771,7 @@ export default function CreativeSuite() {
                             setBackdrop(selectedStyle === "anime" ? "forest" : "neon");
                             setTimeout(() => setStatusMsg(""), 3000);
                           }}
-                          className="mt-2 text-center w-full py-1.5 border border-white/10 hover:border-cyan-500/30 hover:bg-cyan-500/5 text-white/50 hover:text-cyan-400 text-[9px] font-mono uppercase tracking-wider rounded-xs transition-all cursor-pointer"
+                          className="mt-2 text-center w-full py-1.5 border border-line hover:border-fg/60 hover:bg-fg/[0.05] text-fg/50 hover:text-fg text-[11px] font-mono uppercase tracking-wider rounded-xs transition-all cursor-pointer"
                         >
                           Adapt Rig Preset
                         </button>
@@ -784,27 +784,27 @@ export default function CreativeSuite() {
           </div>
 
           {/* BLOCK 2: Emotion & Expression Control */}
-          <div className="bg-[#111112] border border-white/5 p-5 rounded-sm flex flex-col gap-5 relative">
+          <div className="bg-surface border border-line p-5 rounded-sm flex flex-col gap-5 relative">
             <div className="flex justify-between items-center">
               <div className="flex items-center gap-2">
-                <span className="text-[10px] font-mono text-cyan-400">02</span>
-                <h2 className="text-xs uppercase tracking-widest font-semibold text-white/80">Emotion &amp; Expression Control</h2>
+                <span className="text-[11px] font-mono text-fg">02</span>
+                <h2 className="text-xs uppercase tracking-widest font-semibold text-fg/80">Emotion &amp; Expression Control</h2>
               </div>
-              <span className="text-[9px] font-mono bg-purple-500/10 text-purple-400 border border-purple-500/20 px-2 py-0.5 rounded-sm">Lip-Sync &amp; Posture Rig</span>
+              <span className="text-[11px] font-mono bg-fg/[0.05] text-fg border border-fg/60 px-2 py-0.5 rounded-sm">Lip-Sync &amp; Posture Rig</span>
             </div>
 
             {/* Presets */}
             <div className="flex flex-col gap-2">
-              <label className="text-[10px] uppercase font-bold text-white/40 tracking-wider">Quick Emotional Presets</label>
+              <label className="text-[11px] uppercase font-bold text-fg/40 tracking-wider">Quick Emotional Presets</label>
               <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
                 {(["neutral", "joy", "anger", "sadness", "fear", "awe"] as const).map((expr) => (
                   <button
                     key={expr}
                     onClick={() => applyPresetExpression(expr)}
-                    className={`py-1.5 text-[10px] font-mono uppercase rounded-xs transition-all border cursor-pointer ${
+                    className={`py-1.5 text-[11px] font-mono uppercase rounded-xs transition-all border cursor-pointer ${
                       expression === expr
-                        ? "bg-purple-600 text-white border-purple-500 font-bold"
-                        : "bg-black/40 text-white/50 border-white/5 hover:border-white/10 hover:text-white"
+                        ? "bg-accent text-fg border-fg/60 font-bold"
+                        : "bg-black/40 text-fg/50 border-line hover:border-line hover:text-fg"
                     }`}
                   >
                     {expr}
@@ -815,99 +815,99 @@ export default function CreativeSuite() {
 
             {/* Expression Sliders */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="flex flex-col gap-3 p-3.5 bg-black/40 border border-white/5 rounded-xs">
-                <span className="text-[10px] font-mono text-purple-400 font-bold uppercase">Facial Muscle Controls</span>
+              <div className="flex flex-col gap-3 p-3.5 bg-black/40 border border-line rounded-xs">
+                <span className="text-[11px] font-mono text-fg font-bold uppercase">Facial Muscle Controls</span>
                 
                 <div className="flex flex-col gap-1">
-                  <div className="flex justify-between text-[10px] font-mono text-white/60">
+                  <div className="flex justify-between text-[11px] font-mono text-fg/60">
                     <span>Eyebrow Raise</span>
                     <span>{eyebrowRaise}%</span>
                   </div>
                   <input
                     type="range" min="0" max="100" value={eyebrowRaise}
                     onChange={(e) => setEyebrowRaise(Number(e.target.value))}
-                    className="accent-purple-500 bg-neutral-800 h-1 rounded"
+                    className="accent-accent bg-raised h-1 rounded"
                   />
                 </div>
 
                 <div className="flex flex-col gap-1">
-                  <div className="flex justify-between text-[10px] font-mono text-white/60">
+                  <div className="flex justify-between text-[11px] font-mono text-fg/60">
                     <span>Eyebrow Furrow</span>
                     <span>{eyebrowFurrow}%</span>
                   </div>
                   <input
                     type="range" min="0" max="100" value={eyebrowFurrow}
                     onChange={(e) => setEyebrowFurrow(Number(e.target.value))}
-                    className="accent-purple-500 bg-neutral-800 h-1 rounded"
+                    className="accent-accent bg-raised h-1 rounded"
                   />
                 </div>
 
                 <div className="flex flex-col gap-1">
-                  <div className="flex justify-between text-[10px] font-mono text-white/60">
+                  <div className="flex justify-between text-[11px] font-mono text-fg/60">
                     <span>Eye Squint</span>
                     <span>{eyeSquint}%</span>
                   </div>
                   <input
                     type="range" min="0" max="100" value={eyeSquint}
                     onChange={(e) => setEyeSquint(Number(e.target.value))}
-                    className="accent-purple-500 bg-neutral-800 h-1 rounded"
+                    className="accent-accent bg-raised h-1 rounded"
                   />
                 </div>
 
                 <div className="flex flex-col gap-1">
-                  <div className="flex justify-between text-[10px] font-mono text-white/60">
+                  <div className="flex justify-between text-[11px] font-mono text-fg/60">
                     <span>Cheek Blush</span>
                     <span>{blushIntensity}%</span>
                   </div>
                   <input
                     type="range" min="0" max="100" value={blushIntensity}
                     onChange={(e) => setBlushIntensity(Number(e.target.value))}
-                    className="accent-purple-500 bg-neutral-800 h-1 rounded"
+                    className="accent-accent bg-raised h-1 rounded"
                   />
                 </div>
               </div>
 
-              <div className="flex flex-col gap-3 p-3.5 bg-black/40 border border-white/5 rounded-xs">
-                <span className="text-[10px] font-mono text-purple-400 font-bold uppercase">Mouth &amp; Dialogue Sync</span>
+              <div className="flex flex-col gap-3 p-3.5 bg-black/40 border border-line rounded-xs">
+                <span className="text-[11px] font-mono text-fg font-bold uppercase">Mouth &amp; Dialogue Sync</span>
                 
                 <div className="flex flex-col gap-1">
-                  <div className="flex justify-between text-[10px] font-mono text-white/60">
+                  <div className="flex justify-between text-[11px] font-mono text-fg/60">
                     <span>Smile Curve</span>
                     <span>{smileFactor}%</span>
                   </div>
                   <input
                     type="range" min="-100" max="100" value={smileFactor}
                     onChange={(e) => setSmileFactor(Number(e.target.value))}
-                    className="accent-purple-500 bg-neutral-800 h-1 rounded"
+                    className="accent-accent bg-raised h-1 rounded"
                   />
                 </div>
 
                 <div className="flex flex-col gap-1">
-                  <div className="flex justify-between text-[10px] font-mono text-white/60">
+                  <div className="flex justify-between text-[11px] font-mono text-fg/60">
                     <span>Mouth Opening (Speech)</span>
                     <span>{mouthOpen}%</span>
                   </div>
                   <input
                     type="range" min="0" max="100" value={mouthOpen}
                     onChange={(e) => setMouthOpen(Number(e.target.value))}
-                    className="accent-purple-500 bg-neutral-800 h-1 rounded"
+                    className="accent-accent bg-raised h-1 rounded"
                   />
                 </div>
 
                 <div className="flex flex-col gap-1">
-                  <div className="flex justify-between text-[10px] font-mono text-white/60">
+                  <div className="flex justify-between text-[11px] font-mono text-fg/60">
                     <span>Active Posture Theme</span>
-                    <span className="lowercase font-bold text-cyan-400">{activeGesture}</span>
+                    <span className="lowercase font-bold text-fg">{activeGesture}</span>
                   </div>
                   <div className="grid grid-cols-3 gap-1.5 mt-1">
                     {(["thoughtful", "welcoming", "triumphant", "defensive", "aggressive", "despondent"] as const).map((gest) => (
                       <button
                         key={gest}
                         onClick={() => setActiveGesture(gest)}
-                        className={`text-[9px] font-mono uppercase py-1 border transition-all rounded-xs cursor-pointer ${
+                        className={`text-[11px] font-mono uppercase py-1 border transition-all rounded-xs cursor-pointer ${
                           activeGesture === gest
-                            ? "border-cyan-500 text-cyan-400 bg-cyan-950/20"
-                            : "border-white/5 text-white/40 hover:text-white"
+                            ? "border-fg/60 text-fg bg-fg/[0.05]"
+                            : "border-line text-fg/40 hover:text-fg"
                         }`}
                       >
                         {gest}
@@ -919,13 +919,13 @@ export default function CreativeSuite() {
             </div>
 
             {/* Smart Dialogue Subtext Audio Sync */}
-            <div className="p-4 bg-purple-950/10 border border-purple-500/20 rounded-xs flex flex-col gap-3">
+            <div className="p-4 bg-fg/[0.05] border border-fg/60 rounded-xs flex flex-col gap-3">
               <div className="flex items-center justify-between">
-                <span className="text-[10px] font-mono text-purple-400 font-bold uppercase flex items-center gap-1.5">
+                <span className="text-[11px] font-mono text-fg font-bold uppercase flex items-center gap-1.5">
                   <Volume2 className="w-3.5 h-3.5" />
                   <span>Subtext Emotional Dialogue Parser</span>
                 </span>
-                <span className="text-[8px] font-mono text-purple-400">Lip-Sync Simulator</span>
+                <span className="text-[11px] font-mono text-fg">Lip-Sync Simulator</span>
               </div>
 
               <div className="flex flex-col gap-2">
@@ -934,29 +934,29 @@ export default function CreativeSuite() {
                   value={dialogueText}
                   onChange={(e) => setDialogueText(e.target.value)}
                   placeholder="Enter character line to analyze subtext and sync lips/gestures..."
-                  className="w-full bg-[#080809] border border-white/10 rounded-sm p-2 text-xs font-serif italic text-neutral-200 focus:outline-none focus:border-purple-500"
+                  className="w-full bg-ink border border-line rounded-sm p-2 text-xs font-serif italic text-fg focus:outline-none focus:border-fg/60"
                 />
 
                 <div className="flex flex-wrap items-center justify-between gap-3 mt-1">
                   <div className="flex items-center gap-1.5">
-                    <span className="text-[9px] font-mono text-white/40">Mood Subtext:</span>
+                    <span className="text-[11px] font-mono text-fg/40">Mood Subtext:</span>
                     <select
                       value={dialogueMood}
                       onChange={(e) => setDialogueMood(e.target.value as any)}
-                      className="bg-black border border-white/5 p-1 rounded-sm text-[10px] text-purple-400 focus:outline-none font-mono"
+                      className="bg-black border border-line p-1 rounded-sm text-[11px] text-fg focus:outline-none font-mono"
                     >
-                      <option value="triumphant">🏆 Triumphant Glory</option>
-                      <option value="aggressive">🔥 Aggressive Threat</option>
-                      <option value="sadness">💧 Desolate Grief</option>
-                      <option value="fear">⚡ Terrified Shock</option>
-                      <option value="awe">🌌 Cosmic Revelation</option>
+                      <option value="triumphant">Triumphant Glory</option>
+                      <option value="aggressive">Aggressive Threat</option>
+                      <option value="sadness">Desolate Grief</option>
+                      <option value="fear">Terrified Shock</option>
+                      <option value="awe">Cosmic Revelation</option>
                     </select>
                   </div>
 
                   <button
                     onClick={runDialogueSync}
                     disabled={isSyncingDialogue}
-                    className="bg-purple-600 hover:bg-purple-500 text-white font-extrabold text-[9px] uppercase tracking-wider px-4 py-2 rounded-xs flex items-center gap-1.5 cursor-pointer"
+                    className="bg-accent hover:bg-accent text-fg font-extrabold text-[11px] uppercase tracking-wider px-4 py-2 rounded-xs flex items-center gap-1.5 cursor-pointer"
                   >
                     {isSyncingDialogue ? (
                       <>
@@ -974,17 +974,17 @@ export default function CreativeSuite() {
               </div>
 
               {/* Waveform Visualization */}
-              <div className="h-10 bg-black/50 border border-white/5 rounded-sm flex items-center justify-center gap-1.5 px-4 overflow-hidden relative">
+              <div className="h-10 bg-black/50 border border-line rounded-sm flex items-center justify-center gap-1.5 px-4 overflow-hidden relative">
                 {isSyncingDialogue ? (
                   waveAnimation.map((h, i) => (
                     <span
                       key={i}
                       style={{ height: `${h}px` }}
-                      className="w-1 bg-purple-500 rounded-full transition-all duration-100 shadow-md shadow-purple-500/50"
+                      className="w-1 bg-accent rounded-full transition-all duration-100 shadow-md"
                     ></span>
                   ))
                 ) : (
-                  <span className="text-[9px] font-mono text-white/30 tracking-widest uppercase">
+                  <span className="text-[11px] font-mono text-fg/30 tracking-widest uppercase">
                     Frequency Spectrum Ready // Awaiting Sync Trigger
                   </span>
                 )}
@@ -996,21 +996,21 @@ export default function CreativeSuite() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             
             {/* Asset Customization */}
-            <div className="bg-[#111112] border border-white/5 p-5 rounded-sm flex flex-col gap-4">
-              <div className="flex items-center gap-2 border-b border-white/5 pb-2">
-                <span className="text-[10px] font-mono text-cyan-400">03</span>
-                <h3 className="text-xs uppercase tracking-widest font-semibold text-white/80">Asset Configurator</h3>
+            <div className="bg-surface border border-line p-5 rounded-sm flex flex-col gap-4">
+              <div className="flex items-center gap-2 border-b border-line pb-2">
+                <span className="text-[11px] font-mono text-fg">03</span>
+                <h3 className="text-xs uppercase tracking-widest font-semibold text-fg/80">Asset Configurator</h3>
               </div>
 
               <div className="flex flex-col gap-3">
                 {/* Skin & Hair customization */}
                 <div className="flex flex-col gap-1.5">
-                  <span className="text-[9px] font-mono text-white/40 uppercase">A. Character Class & Hair</span>
+                  <span className="text-[11px] font-mono text-fg/40 uppercase">A. Character Class & Hair</span>
                   <div className="grid grid-cols-2 gap-2">
                     <select
                       value={charClass}
                       onChange={(e: any) => setCharClass(e.target.value)}
-                      className="bg-[#080809] border border-white/10 rounded-sm p-1.5 text-[10px] text-white/80 focus:outline-none"
+                      className="bg-ink border border-line rounded-sm p-1.5 text-[11px] text-fg/80 focus:outline-none"
                     >
                       <option value="cyber">Cyber Hacker</option>
                       <option value="astral">Astral Explorer</option>
@@ -1022,7 +1022,7 @@ export default function CreativeSuite() {
                     <select
                       value={hairStyle}
                       onChange={(e: any) => setHairStyle(e.target.value)}
-                      className="bg-[#080809] border border-white/10 rounded-sm p-1.5 text-[10px] text-white/80 focus:outline-none"
+                      className="bg-ink border border-line rounded-sm p-1.5 text-[11px] text-fg/80 focus:outline-none"
                     >
                       <option value="quantum">Quantum Flow</option>
                       <option value="sleek">Sleek Crop</option>
@@ -1035,39 +1035,39 @@ export default function CreativeSuite() {
                 {/* Color pickers */}
                 <div className="grid grid-cols-3 gap-2">
                   <div className="flex flex-col gap-1">
-                    <span className="text-[8px] font-mono text-white/40 uppercase text-center">Hair Color</span>
+                    <span className="text-[11px] font-mono text-fg/40 uppercase text-center">Hair Color</span>
                     <input
                       type="color" value={hairColor}
                       onChange={(e) => setHairColor(e.target.value)}
-                      className="w-full h-8 bg-transparent border border-white/10 rounded-sm cursor-pointer p-0"
+                      className="w-full h-8 bg-transparent border border-line rounded-sm cursor-pointer p-0"
                     />
                   </div>
                   <div className="flex flex-col gap-1">
-                    <span className="text-[8px] font-mono text-white/40 uppercase text-center">Eye Glow</span>
+                    <span className="text-[11px] font-mono text-fg/40 uppercase text-center">Eye Glow</span>
                     <input
                       type="color" value={eyeColor}
                       onChange={(e) => setEyeColor(e.target.value)}
-                      className="w-full h-8 bg-transparent border border-white/10 rounded-sm cursor-pointer p-0"
+                      className="w-full h-8 bg-transparent border border-line rounded-sm cursor-pointer p-0"
                     />
                   </div>
                   <div className="flex flex-col gap-1">
-                    <span className="text-[8px] font-mono text-white/40 uppercase text-center">Skin Tone</span>
+                    <span className="text-[11px] font-mono text-fg/40 uppercase text-center">Skin Tone</span>
                     <input
                       type="color" value={skinColor}
                       onChange={(e) => setSkinColor(e.target.value)}
-                      className="w-full h-8 bg-transparent border border-white/10 rounded-sm cursor-pointer p-0"
+                      className="w-full h-8 bg-transparent border border-line rounded-sm cursor-pointer p-0"
                     />
                   </div>
                 </div>
 
                 {/* Costume Themes */}
-                <div className="flex flex-col gap-1.5 mt-1 border-t border-white/5 pt-3">
-                  <span className="text-[9px] font-mono text-white/40 uppercase">B. Costume Theme & Decals</span>
+                <div className="flex flex-col gap-1.5 mt-1 border-t border-line pt-3">
+                  <span className="text-[11px] font-mono text-fg/40 uppercase">B. Costume Theme & Decals</span>
                   <div className="grid grid-cols-2 gap-2">
                     <select
                       value={costumeTheme}
                       onChange={(e: any) => setCostumeTheme(e.target.value)}
-                      className="bg-[#080809] border border-white/10 rounded-sm p-1.5 text-[10px] text-white/80 focus:outline-none"
+                      className="bg-ink border border-line rounded-sm p-1.5 text-[11px] text-fg/80 focus:outline-none"
                     >
                       <option value="trench">Duster Trenchcoat</option>
                       <option value="solar">Solar Exosuit</option>
@@ -1079,7 +1079,7 @@ export default function CreativeSuite() {
                     <select
                       value={costumeDecal}
                       onChange={(e: any) => setCostumeDecal(e.target.value as any)}
-                      className="bg-[#080809] border border-white/10 rounded-sm p-1.5 text-[10px] text-white/80 focus:outline-none"
+                      className="bg-ink border border-line rounded-sm p-1.5 text-[11px] text-fg/80 focus:outline-none"
                     >
                       <option value="grid">Grid Pattern Decal</option>
                       <option value="star">Star Crest Decal</option>
@@ -1093,23 +1093,23 @@ export default function CreativeSuite() {
                 {/* Costume colors */}
                 <div className="grid grid-cols-2 gap-3 items-center">
                   <div className="flex flex-col gap-1">
-                    <span className="text-[8px] font-mono text-white/40 uppercase">Costume Glow Color</span>
+                    <span className="text-[11px] font-mono text-fg/40 uppercase">Costume Glow Color</span>
                     <input
                       type="color" value={costumeAccentColor}
                       onChange={(e) => setCostumeAccentColor(e.target.value)}
-                      className="w-full h-7 bg-transparent border border-white/10 rounded-sm cursor-pointer p-0"
+                      className="w-full h-7 bg-transparent border border-line rounded-sm cursor-pointer p-0"
                     />
                   </div>
 
                   <div className="flex flex-col gap-1">
-                    <div className="flex justify-between text-[8px] font-mono text-white/40">
+                    <div className="flex justify-between text-[11px] font-mono text-fg/40">
                       <span className="uppercase">Emission Brightness</span>
                       <span>{emissionBrightness}</span>
                     </div>
                     <input
                       type="range" min="0" max="100" value={emissionBrightness}
                       onChange={(e) => setEmissionBrightness(Number(e.target.value))}
-                      className="accent-cyan-500 bg-neutral-800 h-1 rounded mt-1.5"
+                      className="accent-accent bg-raised h-1 rounded mt-1.5"
                     />
                   </div>
                 </div>
@@ -1117,41 +1117,41 @@ export default function CreativeSuite() {
             </div>
 
             {/* Visual Effects & Lighting */}
-            <div className="bg-[#111112] border border-white/5 p-5 rounded-sm flex flex-col gap-4">
-              <div className="flex items-center gap-2 border-b border-white/5 pb-2">
-                <span className="text-[10px] font-mono text-cyan-400">04</span>
-                <h3 className="text-xs uppercase tracking-widest font-semibold text-white/80">Visual Effects Integration</h3>
+            <div className="bg-surface border border-line p-5 rounded-sm flex flex-col gap-4">
+              <div className="flex items-center gap-2 border-b border-line pb-2">
+                <span className="text-[11px] font-mono text-fg">04</span>
+                <h3 className="text-xs uppercase tracking-widest font-semibold text-fg/80">Visual Effects Integration</h3>
               </div>
 
               <div className="flex flex-col gap-3">
                 {/* Lighting Presets */}
                 <div className="flex flex-col gap-1">
-                  <span className="text-[9px] font-mono text-white/40 uppercase mb-1">A. Cinematic Lighting Presets</span>
+                  <span className="text-[11px] font-mono text-fg/40 uppercase mb-1">A. Cinematic Lighting Presets</span>
                   <div className="grid grid-cols-2 gap-1.5">
                     {(["underglow", "rim", "rembrandt", "volumetric"] as const).map((lit) => (
                       <button
                         key={lit}
                         onClick={() => loadLightingPreset(lit)}
-                        className={`py-1 text-[9px] font-mono uppercase rounded-xs border transition-all cursor-pointer ${
+                        className={`py-1 text-[11px] font-mono uppercase rounded-xs border transition-all cursor-pointer ${
                           lightingPreset === lit
-                            ? "border-cyan-500 text-cyan-400 bg-cyan-950/15 font-bold"
-                            : "border-white/5 text-white/40 hover:text-white"
+                            ? "border-fg/60 text-fg bg-fg/[0.05] font-bold"
+                            : "border-line text-fg/40 hover:text-fg"
                         }`}
                       >
-                        {lit === "underglow" ? "💡 Underglow" : lit === "rim" ? "⚡ Rim Light" : lit === "rembrandt" ? "🌗 Rembrandt" : "☁️ Volumetric"}
+                        {lit === "underglow" ? "Underglow" : lit === "rim" ? "Rim Light" : lit === "rembrandt" ? "Rembrandt" : "☁️ Volumetric"}
                       </button>
                     ))}
                   </div>
                 </div>
 
                 {/* Particle Systems */}
-                <div className="flex flex-col gap-1.5 border-t border-white/5 pt-3">
-                  <span className="text-[9px] font-mono text-white/40 uppercase">B. Interactive Particle Layers</span>
+                <div className="flex flex-col gap-1.5 border-t border-line pt-3">
+                  <span className="text-[11px] font-mono text-fg/40 uppercase">B. Interactive Particle Layers</span>
                   <div className="grid grid-cols-2 gap-2">
                     <select
                       value={particleType}
                       onChange={(e: any) => setParticleType(e.target.value)}
-                      className="bg-[#080809] border border-white/10 rounded-sm p-1.5 text-[10px] text-white/80 focus:outline-none"
+                      className="bg-ink border border-line rounded-sm p-1.5 text-[11px] text-fg/80 focus:outline-none"
                     >
                       <option value="sparks">Cyber Sparks</option>
                       <option value="embers">Glowing Embers</option>
@@ -1161,29 +1161,29 @@ export default function CreativeSuite() {
                       <option value="dust">Volumetric Dust</option>
                     </select>
 
-                    <div className="flex justify-between items-center bg-[#080809] border border-white/10 rounded-sm px-2 text-[10px]">
-                      <span className="text-white/40 font-mono">COUNT:</span>
+                    <div className="flex justify-between items-center bg-ink border border-line rounded-sm px-2 text-[11px]">
+                      <span className="text-fg/40 font-mono">COUNT:</span>
                       <input
                         type="number" min="10" max="250" step="10" value={particleCount}
                         onChange={(e) => setParticleCount(Math.min(250, Number(e.target.value)))}
-                        className="w-12 bg-transparent text-right text-white font-mono focus:outline-none font-bold"
+                        className="w-12 bg-transparent text-right text-fg font-mono focus:outline-none font-bold"
                       />
                     </div>
                   </div>
                 </div>
 
                 {/* Color Grading Preset */}
-                <div className="flex flex-col gap-1.5 border-t border-white/5 pt-3">
-                  <span className="text-[9px] font-mono text-white/40 uppercase">C. Color Grading Filters</span>
-                  <div className="grid grid-cols-5 gap-1 text-[9px] font-mono">
+                <div className="flex flex-col gap-1.5 border-t border-line pt-3">
+                  <span className="text-[11px] font-mono text-fg/40 uppercase">C. Color Grading Filters</span>
+                  <div className="grid grid-cols-5 gap-1 text-[11px] font-mono">
                     {(["teal-orange", "noir", "violet", "gold", "vivid"] as const).map((grade) => (
                       <button
                         key={grade}
                         onClick={() => loadVfxPreset(grade)}
                         className={`py-1 border transition-all rounded-xs uppercase cursor-pointer ${
                           colorGrade === grade
-                            ? "border-purple-500 text-purple-400 bg-purple-950/20 font-bold"
-                            : "border-white/5 text-white/40 hover:text-white"
+                            ? "border-fg/60 text-fg bg-fg/[0.05] font-bold"
+                            : "border-line text-fg/40 hover:text-fg"
                         }`}
                         title={grade}
                       >
@@ -1194,26 +1194,26 @@ export default function CreativeSuite() {
 
                   <div className="grid grid-cols-2 gap-3 mt-1.5">
                     <div className="flex flex-col gap-1">
-                      <div className="flex justify-between text-[8px] font-mono text-white/40">
+                      <div className="flex justify-between text-[11px] font-mono text-fg/40">
                         <span>Contrast</span>
                         <span>{vfxContrast}%</span>
                       </div>
                       <input
                         type="range" min="60" max="160" value={vfxContrast}
                         onChange={(e) => setVfxContrast(Number(e.target.value))}
-                        className="accent-purple-500 bg-neutral-800 h-1 rounded"
+                        className="accent-accent bg-raised h-1 rounded"
                       />
                     </div>
 
                     <div className="flex flex-col gap-1">
-                      <div className="flex justify-between text-[8px] font-mono text-white/40">
+                      <div className="flex justify-between text-[11px] font-mono text-fg/40">
                         <span>Bloom Glow</span>
                         <span>{vfxBloom}px</span>
                       </div>
                       <input
                         type="range" min="0" max="60" value={vfxBloom}
                         onChange={(e) => setVfxBloom(Number(e.target.value))}
-                        className="accent-purple-500 bg-neutral-800 h-1 rounded"
+                        className="accent-accent bg-raised h-1 rounded"
                       />
                     </div>
                   </div>
@@ -1227,18 +1227,18 @@ export default function CreativeSuite() {
 
         {/* RIGHT COLUMN: Real-Time Render Stage (Cols 12 -> 5) */}
         <div className="col-span-12 xl:col-span-5 flex flex-col gap-4 sticky top-6">
-          <div className="flex items-center gap-2 text-[10px] uppercase font-bold tracking-widest text-white/50 px-1">
-            <Eye className="w-3.5 h-3.5 text-cyan-400" />
+          <div className="flex items-center gap-2 text-[11px] uppercase font-bold tracking-widest text-fg/50 px-1">
+            <Eye className="w-3.5 h-3.5 text-fg" />
             <span>High-Fidelity Real-Time Render Stage</span>
           </div>
 
           {/* Render Stage Container */}
-          <div className="bg-[#111112] border border-white/5 p-4 rounded-sm flex flex-col gap-4">
+          <div className="bg-surface border border-line p-4 rounded-sm flex flex-col gap-4">
             
             {/* The SVG & Canvas Render Frame */}
             <div
               id="cinematic-render-stage"
-              className="w-full aspect-[4/3] rounded-sm relative overflow-hidden flex items-center justify-center border border-white/5 shadow-inner"
+              className="w-full aspect-[4/3] rounded-sm relative overflow-hidden flex items-center justify-center border border-line shadow-inner"
               style={{
                 background: `radial-gradient(circle at ${lightAngle === 185 ? '50% 100%' : lightAngle === 225 ? '80% 20%' : '50% 30%'}, ${backdropGrads.via} 0%, ${backdropGrads.from} 100%)`,
                 boxShadow: `inset 0 0 40px ${backdropGrads.from}, 0 4px 30px rgba(0,0,0,0.5)`,
@@ -1554,22 +1554,22 @@ export default function CreativeSuite() {
             </div>
 
             {/* Render details and export option */}
-            <div className="flex flex-col gap-2 font-mono text-[10px] text-white/50 border-t border-white/5 pt-3">
+            <div className="flex flex-col gap-2 font-mono text-[11px] text-fg/50 border-t border-line pt-3">
               <div className="flex justify-between">
                 <span>STAGE COORDINATES:</span>
-                <span className="text-white/80">X: 100, Y: 110, DEPTH: MIDGROUND</span>
+                <span className="text-fg/80">X: 100, Y: 110, DEPTH: MIDGROUND</span>
               </div>
               <div className="flex justify-between">
                 <span>VFX PARTICLE STATUS:</span>
-                <span className="text-cyan-400 font-bold uppercase">{particleType} ({particleCount} ACTIVE)</span>
+                <span className="text-fg font-bold uppercase">{particleType} ({particleCount} ACTIVE)</span>
               </div>
               <div className="flex justify-between">
                 <span>LIGHT ANGLE / INTENSITY:</span>
-                <span className="text-white/80">{lightAngle}° / AMBIENT: {ambientIntensity}%</span>
+                <span className="text-fg/80">{lightAngle}° / AMBIENT: {ambientIntensity}%</span>
               </div>
               <div className="flex justify-between">
                 <span>ACTIVE EXPR / GESTURE:</span>
-                <span className="text-purple-400 font-bold uppercase">{expression} / {activeGesture}</span>
+                <span className="text-fg font-bold uppercase">{expression} / {activeGesture}</span>
               </div>
 
               <div className="mt-3 flex gap-2">
@@ -1581,9 +1581,9 @@ export default function CreativeSuite() {
                       setTimeout(() => setStatusMsg(""), 3000);
                     }
                   }}
-                  className="flex-grow bg-neutral-900 hover:bg-neutral-800 border border-white/10 hover:border-white/20 text-neutral-300 font-bold uppercase tracking-wider py-2 rounded-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer"
+                  className="flex-grow bg-surface hover:bg-raised border border-line hover:border-line-strong text-fg font-bold uppercase tracking-wider py-2 rounded-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer"
                 >
-                  <Camera className="w-3.5 h-3.5 text-cyan-400" />
+                  <Camera className="w-3.5 h-3.5 text-fg" />
                   <span>Snapshot Frame</span>
                 </button>
               </div>
@@ -1592,11 +1592,11 @@ export default function CreativeSuite() {
           </div>
 
           {/* Quick Informational Tooltip Card */}
-          <div className="bg-gradient-to-r from-purple-950/20 to-cyan-950/20 border border-white/5 p-4 rounded-sm flex gap-3">
-            <HelpCircle className="w-5 h-5 text-cyan-400 shrink-0 mt-0.5" />
+          <div className="bg-gradient-to-r from-fg/[0.04] to-fg/[0.04] border border-line p-4 rounded-sm flex gap-3">
+            <HelpCircle className="w-5 h-5 text-fg shrink-0 mt-0.5" />
             <div className="flex flex-col gap-1">
-              <h4 className="text-[11px] font-bold uppercase tracking-wider text-white/90">Creative Suite Integration Tips</h4>
-              <p className="text-[10px] text-white/50 leading-relaxed font-sans">
+              <h4 className="text-[11px] font-bold uppercase tracking-wider text-fg/90">Creative Suite Integration Tips</h4>
+              <p className="text-[11px] text-fg/50 leading-relaxed font-sans">
                 These controls feed directly into the **Animate** and **Storyboard** systems. Adjusting the face muscle parameters and posture gestures ensures that your characters communicate genuine mood subtexts that perfectly align with your dialogue lines or script.
               </p>
             </div>
