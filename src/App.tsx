@@ -4,10 +4,10 @@ import { useStudio } from "./features/useStudio";
 import { StoryboardView } from "./features/storyboard/StoryboardView";
 import { LooksView } from "./features/looks/LooksView";
 import { ProjectMenu } from "./features/ProjectMenu";
-import { CharactersView } from "./features/forge/CharactersView";
 import { Button, cx } from "./ui";
 import { Leader } from "./features/Leader";
 
+const CharactersView = lazy(() => import("./features/forge/CharactersView").then((m) => ({ default: m.CharactersView })));
 const RiggingMoCap = lazy(() => import("./components/RiggingMoCap"));
 const ProductivityStudio = lazy(() => import("./components/ProductivityStudio"));
 
