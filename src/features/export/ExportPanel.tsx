@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Download, Square, Video } from "lucide-react";
 import type { Storyboard } from "../../types";
-import { Button, Field, Notice, Progress, Section, Segmented, downloadUrl } from "../../ui";
+import { Button, Field, Notice, Progress, Section, Segmented } from "../../ui";
+import { saveFile } from "../../lib/saveFile";
 import { recordStoryboard, supportedRecordingType, type DrawExtras } from "./recordStoryboard";
 
 const RESOLUTIONS = {
@@ -39,7 +40,7 @@ export function ExportPanel({
   const [withAudio, setWithAudio] = useState(true);
   const [progress, setProgress] = useState<number | null>(null);
   const [error, setError] = useState("");
-  const [result, setResult] = useState<{ url: string; size: number; name: string } | null>(null);
+  const [result, setResult] = useState<{ url: string; blob: Blob; size: number; name: string } | null>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const abortRef = useRef<AbortController | null>(null);
 
@@ -72,6 +73,7 @@ export function ExportPanel({
       const slug = storyboard.title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "storyboard";
       setResult({
         url: URL.createObjectURL(out.blob),
+        blob: out.blob,
         size: out.blob.size,
         name: `${slug}-${RESOLUTIONS[resolution].label}-${fps}fps.${out.extension}`,
       });
@@ -154,7 +156,13 @@ export function ExportPanel({
             </Button>
           )}
           {result && !recording && (
-            <Button icon={<Download className="h-4 w-4" />} onClick={() => downloadUrl(result.url, result.name)}>
+            <Button icon={<Download className="h-4 w-4" />} onClick={async () => {
+                try {
+                  await saveFile(result.name, result.blob);
+                } catch (err: any) {
+                  setError(err?.message || "Couldn't save the video.");
+                }
+              }}>
               Download · {formatBytes(result.size)}
             </Button>
           )}

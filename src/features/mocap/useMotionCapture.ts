@@ -155,7 +155,7 @@ export function useMotionCapture(onTake: (frames: Pose[], frameSeconds: number) 
       const missing = err?.name === "NotFoundError" || err?.name === "OverconstrainedError";
       setError(
         denied
-          ? "Camera permission was refused. Allow camera access for this site in your browser, then try again."
+          ? "Camera access was blocked. Allow the camera for this site in your browser settings. Embedded previews can't use the camera at all; run ZH-art directly to use motion capture."
           : missing
             ? "No camera was found."
             : err?.message || "Couldn't start motion capture.",

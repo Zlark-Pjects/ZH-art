@@ -15,6 +15,7 @@ import {
   saveProject,
   type ProjectSummary,
 } from "./storage";
+import { saveFile } from "../lib/saveFile";
 
 export const STARTER_IDEA = "Astronaut fishing for stars on a crescent moon";
 
@@ -224,12 +225,7 @@ export function useProject() {
       if (data) embedded[id] = data;
     }
     const blob = new Blob([JSON.stringify({ format: "zh-art-project", project, assets: embedded })], { type: "application/json" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `${project.board.title.toLowerCase().replace(/[^a-z0-9]+/g, "-") || "project"}.zhart.json`;
-    a.click();
-    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    await saveFile(`${project.board.title.toLowerCase().replace(/[^a-z0-9]+/g, "-") || "project"}.zhart.json`, blob);
   }, [project, assets, assetIds]);
 
   const importFile = useCallback(async (file: File) => {

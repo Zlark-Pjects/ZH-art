@@ -262,17 +262,6 @@ export function Chip({ children, onClick, title }: { children: ReactNode; onClic
   );
 }
 
-/* ---------- Helpers ---------- */
-
-export function downloadUrl(url: string, filename: string) {
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = filename;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-}
-
 /* ---------- Editor controls ---------- */
 
 export function Slider({
