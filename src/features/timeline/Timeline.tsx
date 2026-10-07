@@ -353,6 +353,15 @@ export function Timeline({
                         <span className="truncate text-[11px] font-medium text-fg">{s.title || "Untitled"}</span>
                         <span className="shrink-0 font-mono text-[10px] text-fg/80">{s.duration.toFixed(1)}s</span>
                       </span>
+                      {/* Camera keys */}
+                      {s.cameraKeys?.map((k, n) => (
+                        <span
+                          key={n}
+                          aria-hidden
+                          className="pointer-events-none absolute top-1 h-1.5 w-1.5 -translate-x-1/2 rotate-45 bg-[#5b8cff]"
+                          style={{ left: `${(Math.min(k.t, s.duration) / s.duration) * 100}%` }}
+                        />
+                      ))}
                     </button>
                     {/* Trim handle */}
                     <span

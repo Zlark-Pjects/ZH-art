@@ -1,7 +1,7 @@
 import type { CharacterLook, ElementSpec, Grade, RigClip, Scene } from "../../types";
-import { RIG_FLOOR, poseAt } from "../../project/rig";
-import { buildFigure, type DrawOp } from "../../project/forge/figure";
-import { drawCharacter, planOf, stateForClip } from "../../project/forge/plans";
+import { RIG_FLOOR, ease } from "../../project/rig";
+import type { DrawOp } from "../../project/forge/figure";
+import { drawClip } from "../../project/forge/plans";
 
 /**
  * Pure description of one frame of a storyboard scene, shared by the live SVG
@@ -114,14 +114,33 @@ function particleSeeds(scene: Scene) {
 const wrap = (v: number) => ((v % 100) + 100) % 100;
 
 /** Build the frame for `scene` at `t` seconds into the scene. */
-export function computeFrame(scene: Scene, t: number, levels: Levels): Frame {
+/** Where the camera is at `t` seconds into a scene: its keys if it has any, else the preset move. */
+export function cameraAt(scene: Scene, t: number): { zoom: number; x: number; y: number } {
+  const keys = scene.cameraKeys;
+  if (keys?.length) {
+    const sorted = [...keys].sort((a, b) => a.t - b.t);
+    if (t <= sorted[0].t) return sorted[0];
+    const last = sorted[sorted.length - 1];
+    if (t >= last.t) return last;
+    let k = 0;
+    while (k < sorted.length - 2 && sorted[k + 1].t <= t) k++;
+    const a = sorted[k];
+    const b = sorted[k + 1];
+    const e = ease(a.easing, (t - a.t) / Math.max(1e-6, b.t - a.t));
+    return { zoom: a.zoom + (b.zoom - a.zoom) * e, x: a.x + (b.x - a.x) * e, y: a.y + (b.y - a.y) * e };
+  }
   const m = scene.cameraMotion;
   const p = scene.duration > 0 ? Math.min(1, Math.max(0, t / scene.duration)) : 0;
   // Ease the camera so moves start and land softly
   const e = p < 0.5 ? 2 * p * p : 1 - Math.pow(-2 * p + 2, 2) / 2;
-  const zoom = m.scaleStart + (m.scaleEnd - m.scaleStart) * e;
-  const cx = (m.xStart + (m.xEnd - m.xStart) * e) * 2;
-  const cy = (m.yStart + (m.yEnd - m.yStart) * e) * 2;
+  return { zoom: m.scaleStart + (m.scaleEnd - m.scaleStart) * e, x: m.xStart + (m.xEnd - m.xStart) * e, y: m.yStart + (m.yEnd - m.yStart) * e };
+}
+
+export function computeFrame(scene: Scene, t: number, levels: Levels): Frame {
+  const cam = cameraAt(scene, t);
+  const zoom = cam.zoom;
+  const cx = cam.x * 2;
+  const cy = cam.y * 2;
 
   const layers: FrameLayer[] = ([1, 2, 3] as const).map((depth) => {
     const cfg = DEPTHS[depth];
@@ -210,7 +229,7 @@ export function castFigures(scene: Scene, t: number, characters: CharacterLook[]
     const clip = clips.find((c) => c.id === member.clipId);
     if (!look || !clip) continue;
     // Bipeds perform the rig clip; other body plans play the matching game animation
-    const ops = planOf(look) === "biped" ? buildFigure(poseAt(clip, t), look, t) : drawCharacter(look, stateForClip(clip), t);
+    const ops = drawClip(look, clip, t);
     const x = (member.x / 100) * FRAME_W;
     const y = (member.y / 100) * FRAME_H;
     // Rig height from head top (~50) to feet maps to `scale` of the frame height

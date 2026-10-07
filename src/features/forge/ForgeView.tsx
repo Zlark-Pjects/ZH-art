@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Dices, Dna, Lock, Redo2, RefreshCw, Shuffle, Sparkles, Undo2, Unlock } from "lucide-react";
-import type { BodyPlan, CharacterBuild, CharacterLook, CharacterPalette, PartSlot } from "../../types";
+import type { BodyPlan, CharacterBuild, CharacterLook, CharacterPalette, PartSlot, RigClip } from "../../types";
 import { SLOTS, buildOf } from "../../project/forge/figure";
 import { BODY_PLANS, GAME_STATES, drawCharacter, type GameState } from "../../project/forge/plans";
 import { ARCHETYPES, breed, lookFromBuild, mutate, nameFor, newSeed, randomBuild, type LockKey } from "../../project/forge/generate";
@@ -34,9 +34,11 @@ type Tab = "generate" | "parts" | "colours" | "export";
 
 export function ForgeView({
   characters,
+  clips = [],
   onSave,
 }: {
   characters: CharacterLook[];
+  clips?: RigClip[];
   onSave: (c: CharacterLook) => void;
 }) {
   const first = useMemo(() => randomBuild(newSeed(), "wild"), []);
@@ -197,7 +199,7 @@ export function ForgeView({
         ]}
       />
 
-      {tab === "export" && <SpriteExport look={look} />}
+      {tab === "export" && <SpriteExport look={look} clips={clips} />}
 
       {tab === "generate" && (
         <div>

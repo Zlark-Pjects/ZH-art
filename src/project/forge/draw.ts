@@ -93,10 +93,15 @@ export function makeKit(build: CharacterBuild, t: number, loop?: number): Kit {
  * `flapRate` control the beat. For side views, `trail` is the direction the
  * cape streams out (-1 = behind a right-facing body).
  */
-export function drawBack(k: Kit, root: P, opts: { span?: number; flapAmp?: number; flapRate?: number; cape?: { left: P; right: P; bottom: number }; trail?: -1 | 1 } = {}) {
+export function drawBack(
+  k: Kit,
+  root: P,
+  opts: { span?: number; flapAmp?: number; flapRate?: number; flap?: number; cape?: { left: P; right: P; bottom: number }; trail?: -1 | 1 } = {},
+) {
   const { ops, c, dark, osc } = k;
   const span = opts.span ?? 1;
-  const flap = osc(opts.flapRate ?? 3) * (opts.flapAmp ?? 7);
+  // `flap` (-1..1) sets the wing angle directly, e.g. from a retargeted pose
+  const flap = (opts.flap ?? osc(opts.flapRate ?? 3)) * (opts.flapAmp ?? 7);
   switch (k.parts.back) {
     case "feathers":
       for (const side of [-1, 1]) {

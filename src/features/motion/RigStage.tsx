@@ -1,7 +1,7 @@
 import { useRef, type PointerEvent as ReactPointerEvent } from "react";
 import type { CharacterLook } from "../../types";
 import { INITIAL_JOINTS, RIG_FLOOR, type Pose } from "../../project/rig";
-import { buildFigure } from "../../project/forge/figure";
+import { drawPosed, planOf } from "../../project/forge/plans";
 import { FigureOps } from "../forge/FigureSvg";
 
 const BONES = INITIAL_JOINTS.filter((j) => j.parent).map((j) => [j.parent!, j.id] as const);
@@ -100,9 +100,17 @@ export function RigStage({
         <Skeleton key={i} pose={g.pose} color={g.tone === "before" ? "#5b8cff" : "#3fbf98"} opacity={0.6} width={5} />
       ))}
 
-      {showFigure && <FigureOps ops={buildFigure(pose, look, time)} />}
+      {showFigure && planOf(look) === "biped" && <FigureOps ops={drawPosed(look, pose, time)} />}
+      {showFigure && planOf(look) !== "biped" && (
+        // Other body plans follow the skeleton: shown inset, since they're side views
+        <g transform="translate(470 -12) scale(0.55)" pointerEvents="none">
+          <rect x={-40} y={-20} width={480} height={520} rx={14} fill="#16161b" stroke="#ffffff" strokeOpacity={0.1} />
+          <line x1={-40} x2={440} y1={RIG_FLOOR} y2={RIG_FLOOR} stroke="#ffffff" strokeOpacity={0.12} />
+          <FigureOps ops={drawPosed(look, pose, time)} />
+        </g>
+      )}
 
-      <Skeleton pose={pose} color="#ffb224" opacity={showFigure ? 0.55 : 0.9} width={showFigure ? 1.5 : 3} />
+      <Skeleton pose={pose} color="#ffb224" opacity={showFigure && planOf(look) === "biped" ? 0.55 : 0.9} width={showFigure && planOf(look) === "biped" ? 1.5 : 3} />
       {INITIAL_JOINTS.map((j) => {
         const p = pose[j.id];
         if (!p) return null;

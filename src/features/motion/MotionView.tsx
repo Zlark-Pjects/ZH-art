@@ -328,7 +328,7 @@ export function MotionView({ studio }: { studio: Studio }) {
         pose={shown}
         look={look}
         time={time}
-        showFigure={biped}
+        showFigure
         editable={!live}
         ghosts={ghosts}
         activeJoint={activeJoint}
@@ -388,7 +388,7 @@ export function MotionView({ studio }: { studio: Studio }) {
               </select>
               {!biped && (
                 <Notice>
-                  Motion clips drive two-legged characters. Four-legged, flying, serpent and floating characters bring their own idle, walk, run, jump and attack to scenes. You can still key the skeleton here and use it on a two-legged character.
+                  This character isn't two-legged, so it follows the skeleton (inset, top right): arms drive front legs, wings or a serpent's head, legs drive back legs, and the hips' height and lean move the body. Keyed and captured clips play this way in scenes; a stock motion with no keys uses the body's own walk, run or attack.
                 </Notice>
               )}
             </div>

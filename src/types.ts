@@ -46,6 +46,20 @@ export interface Scene {
   cast?: CastMember[];
   /** How this scene arrives from the one before it; missing means a straight cut */
   transition?: TransitionKind;
+  /** Hand-placed camera; when present it replaces the preset move */
+  cameraKeys?: CameraKey[];
+}
+
+/** The camera at one moment of a scene. */
+export interface CameraKey {
+  /** Seconds into the scene */
+  t: number;
+  zoom: number;
+  /** Pan and rise, in the same units as CameraMotion x/y */
+  x: number;
+  y: number;
+  /** How the camera moves from this key to the next */
+  easing: Easing;
 }
 
 export type TransitionKind = "cut" | "fade" | "wipe" | "zoom" | "flash";

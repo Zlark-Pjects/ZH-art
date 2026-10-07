@@ -38,8 +38,10 @@ export function StoryboardView({ studio, onNavigate }: { studio: Studio; onNavig
   const [tab, setTab] = useState<RailTab>("build");
   const [selection, setSelection] = useState<StageSelection>(null);
   const [selectedText, setSelectedText] = useState<string | null>(null);
+  // While editing camera keys, the picture shows the camera at the playhead instead of the layout view
+  const [cameraPreview, setCameraPreview] = useState(false);
   const scene = board.scenes[playback.sceneIndex];
-  const layout = tab === "scene" && !playback.isPlaying;
+  const layout = tab === "scene" && !playback.isPlaying && !cameraPreview;
   const titleCards = project.titleCards ?? true;
   const trans = layout ? null : transitionAt(board.scenes, playback.sceneIndex, playback.elapsed);
   const look = trans ? transitionLook(trans.kind, trans.progress) : null;
@@ -47,6 +49,9 @@ export function StoryboardView({ studio, onNavigate }: { studio: Studio; onNavig
 
   // Selection belongs to one scene
   useEffect(() => setSelection(null), [playback.sceneIndex]);
+  useEffect(() => {
+    if (tab !== "scene") setCameraPreview(false);
+  }, [tab]);
 
   const moveSelected = (sel: NonNullable<StageSelection>, x: number, y: number) => {
     const i = playback.sceneIndex;
@@ -60,7 +65,7 @@ export function StoryboardView({ studio, onNavigate }: { studio: Studio; onNavig
   const stage = (
     <FilmGate
       slate={board.title}
-      meta={layout ? "Layout · drag to place" : `${board.visualStyle} · ${playback.bpm} bpm`}
+      meta={layout ? "Layout · drag to place" : cameraPreview && !playback.isPlaying ? "Camera at the playhead" : `${board.visualStyle} · ${playback.bpm} bpm`}
       time={playback.sequenceElapsed}
       progress={playback.sequenceDuration ? playback.sequenceElapsed / playback.sequenceDuration : undefined}
       controls={
@@ -89,7 +94,10 @@ export function StoryboardView({ studio, onNavigate }: { studio: Studio; onNavig
           titleCard={titleCards}
           onSelect={(sel) => {
             setSelection(sel);
-            if (sel) setTab("scene");
+            if (sel) {
+              setTab("scene");
+              setCameraPreview(false);
+            }
           }}
           onMove={moveSelected}
         />
@@ -133,7 +141,7 @@ export function StoryboardView({ studio, onNavigate }: { studio: Studio; onNavig
         ]}
       />
       {tab === "build" && <BuildPanel studio={studio} />}
-      {tab === "scene" && <SceneInspector studio={studio} selection={selection} setSelection={setSelection} onNavigate={onNavigate} />}
+      {tab === "scene" && <SceneInspector studio={studio} selection={selection} setSelection={(sel) => { setSelection(sel); if (sel) setCameraPreview(false); }} onNavigate={onNavigate} onCameraPreview={setCameraPreview} />}
       <Suspense fallback={<p className="eyebrow py-10 text-center">Loading…</p>}>
         {tab === "text" && <TextPanel studio={studio} selected={selectedText} onSelect={setSelectedText} />}
         {tab === "sound" && <SoundPanel studio={studio} />}

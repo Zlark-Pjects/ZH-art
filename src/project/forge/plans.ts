@@ -3,6 +3,7 @@ import { mix } from "../builder";
 import { STANDING_POSE, poseAt, type Pose } from "../rig";
 import { add, circle, drawBack, drawHead, drawTail, ellipse, f, FLOOR, line, makeKit, poly, taper, TAU, type DrawOp, type Kit, type P } from "./draw";
 import { buildFigure, buildOf, drawArm, drawLeg } from "./figure";
+import { driveFromPose, type Drive } from "./retarget";
 
 /*
  * Body plans and game animation states. Every plan draws the same parts
@@ -56,6 +57,38 @@ export function drawCharacter(look: CharacterLook, state: GameState, t: number, 
   return k.ops;
 }
 
+/**
+ * Draw a character following a rig pose. Two-legged characters take the pose
+ * as is; other body plans are retargeted (see retarget.ts). `loop` is the
+ * loop length in seconds, so secondary motion repeats exactly.
+ */
+export function drawPosed(look: CharacterLook, pose: Pose, t: number, loop?: number): DrawOp[] {
+  const build = buildOf(look);
+  const plan = build.plan ?? "biped";
+  if (plan === "biped") return buildFigure(pose, look, t, loop);
+  const k = makeKit(build, t, loop);
+  const drive = driveFromPose(pose);
+  // Secondary motion (slither, tendrils) keeps time with a slow idle cycle
+  const phase = (TAU * t) / (loop ?? stateSeconds("idle"));
+  if (plan === "quadruped") quadruped(k, "idle", phase, drive);
+  else if (plan === "flyer") flyer(k, "idle", phase, drive);
+  else if (plan === "serpent") serpent(k, "idle", phase, drive);
+  else floater(k, "idle", phase, drive);
+  return k.ops;
+}
+
+/** Whether a clip is a performance to follow (keys) rather than a stock motion. */
+export const isPerformance = (clip: RigClip) => clip.keyframes.length > 1;
+
+/**
+ * How a cast character plays a clip. Keyed and captured clips are followed
+ * by every body plan; stock motions on non-bipeds use that plan's own gait.
+ */
+export function drawClip(look: CharacterLook, clip: RigClip, t: number, loop?: number): DrawOp[] {
+  if (planOf(look) === "biped" || isPerformance(clip)) return drawPosed(look, poseAt(clip, t), t, loop);
+  return drawCharacter(look, stateForClip(clip), t, loop !== undefined);
+}
+
 /* ---------- Biped ---------- */
 
 const BIPED_MOTION: Record<Exclude<GameState, "jump">, { motion: RigClip["motion"]; intensity: number }> = {
@@ -95,7 +128,7 @@ export function bipedPose(state: GameState, t: number): Pose {
 
 /* ---------- Four legs (side view, facing right) ---------- */
 
-function quadruped(k: Kit, state: GameState, phase: number) {
+function quadruped(k: Kit, state: GameState, phase: number, drive?: Drive) {
   const { ops, c, p, b, osc } = k;
   const L = 140 * p.legs;
   const BL = 200 * p.shoulders;
@@ -124,6 +157,11 @@ function quadruped(k: Kit, state: GameState, phase: number) {
   } else if (state === "attack") {
     lunge = Math.pow(Math.max(0, Math.sin(phase)), 2) * 40;
   }
+  if (drive) {
+    bob = 0;
+    rise = drive.rise;
+    lunge = drive.shift;
+  }
   const C = { x: 200 + lunge, y: FLOOR - L - BH * 0.3 + bob - rise + crouch };
   const hipY = C.y + BH * 0.2;
 
@@ -131,7 +169,16 @@ function quadruped(k: Kit, state: GameState, phase: number) {
   const leg = (rootX: number, off: number, front: boolean, far: boolean) => {
     const root = { x: rootX + (far ? -8 : 0), y: hipY };
     let foot: P;
-    if (state === "jump") {
+    if (drive) {
+      // Hands drive the front legs, feet the back legs (near and far)
+      const l = (front ? drive.front : drive.back)[far ? 1 : 0];
+      // A raised limb lifts the foot forward (rearing / pawing), never up into the body
+      const up = Math.max(0, -l.dy);
+      foot = {
+        x: root.x + l.dx * 0.9 + (front ? up * 0.45 : -up * 0.25),
+        y: Math.min(FLOOR, Math.max(root.y + L * 0.45, root.y + L - up * 0.55 + Math.max(0, l.dy) * 0.3)),
+      };
+    } else if (state === "jump") {
       foot = { x: root.x + (front ? 18 : -18) * tuck, y: root.y + L * (1 - 0.5 * tuck) };
     } else {
       const a = phase * (state === "run" ? 1 : 1) + off;
@@ -173,10 +220,13 @@ function quadruped(k: Kit, state: GameState, phase: number) {
   legRoots.forEach((r, i) => leg(C.x + BL * r, i % 2 === 0 ? offsetsFor(offsets, true, false) : offsetsFor(offsets, false, false), r > 0, false));
 
   // Neck and head
-  const dip = state === "attack" ? Math.pow(Math.max(0, Math.sin(phase)), 2) : 0;
+  const dip = drive ? Math.max(-0.6, Math.min(1, drive.lean / 30 + drive.head.dy / 50)) : state === "attack" ? Math.pow(Math.max(0, Math.sin(phase)), 2) : 0;
   const neckBase = { x: C.x + rx * 0.78, y: C.y - BH * 0.25 };
   const r = 30 * p.head;
-  const head = { x: neckBase.x + 40 + r * 0.5 + dip * 30, y: neckBase.y - 58 * Math.sqrt(p.head) + dip * 45 + Math.sin(phase * (state === "run" ? 2 : 1)) * 3 };
+  const head = {
+    x: neckBase.x + 40 + r * 0.5 + dip * 30 + (drive ? drive.head.dx * 0.4 : 0),
+    y: neckBase.y - 58 * Math.sqrt(p.head) + dip * 45 + Math.sin(phase * (state === "run" ? 2 : 1)) * 3,
+  };
   ops.push(...taper(neckBase, head, 34 * b, 18 * b, c.primary));
   drawHead(k, null, head, r, 12 + dip * 20);
 }
@@ -187,7 +237,7 @@ function offsetsFor(o: { nf: number; ff: number; nb: number; fb: number }, front
 
 /* ---------- Flyer (side view, facing right) ---------- */
 
-function flyer(k: Kit, state: GameState, phase: number) {
+function flyer(k: Kit, state: GameState, phase: number, drive?: Drive) {
   const { ops, c, p, b } = k;
   let bob = Math.sin(phase) * 10;
   let tilt = 0;
@@ -215,6 +265,13 @@ function flyer(k: Kit, state: GameState, phase: number) {
   }
   // Flaps lock to the state's phase so the cycle loops
   flapRate = (TAU / stateSeconds(state)) * (state === "run" ? 3 : 2);
+  if (drive) {
+    // Arms are wings: raise them and the wings rise
+    bob = -drive.rise * 0.8;
+    tilt = drive.lean;
+    dx = drive.shift;
+    flapAmp = 40;
+  }
   const C = { x: 200 + dx, y: 250 + bob };
   const rot = (pt: P): P => {
     const a = (tilt * Math.PI) / 180;
@@ -224,14 +281,15 @@ function flyer(k: Kit, state: GameState, phase: number) {
   };
   // Flyers always have wings: if the design has none, they get feathered ones
   const wingKit: Kit = ["feathers", "bat", "insect"].includes(k.parts.back) ? k : { ...k, parts: { ...k.parts, back: "feathers" } };
-  drawBack(wingKit, rot({ x: C.x - 10, y: C.y - 22 }), { span: 1.25 * p.shoulders, flapAmp, flapRate });
+  drawBack(wingKit, rot({ x: C.x - 10, y: C.y - 22 }), { span: 1.25 * p.shoulders, flapAmp, flapRate, flap: drive?.armsUp });
   drawTail(k, rot({ x: C.x - 64 * p.shoulders, y: C.y + 4 }), -1, 0.85);
   // Tucked legs
   if (k.parts.legs !== "wisp") {
     for (const s of [0, 1]) {
       const hip = rot({ x: C.x - 6 - s * 14, y: C.y + 24 });
-      const knee = rot({ x: C.x - 20 - s * 14, y: C.y + 40 + 10 * p.legs });
-      const foot = rot({ x: C.x - 40 - s * 14, y: C.y + 58 + 16 * p.legs });
+      const kick = drive ? drive.back[s] : { dx: 0, dy: 0 };
+      const knee = rot({ x: C.x - 20 - s * 14 + kick.dx * 0.25, y: C.y + 40 + 10 * p.legs + kick.dy * 0.2 });
+      const foot = rot({ x: C.x - 40 - s * 14 + kick.dx * 0.5, y: C.y + 58 + 16 * p.legs + kick.dy * 0.4 });
       drawLeg(k, hip, knee, foot, -1, s === 0 ? 0.7 : undefined);
     }
   }
@@ -248,7 +306,7 @@ function flyer(k: Kit, state: GameState, phase: number) {
 
 /* ---------- Serpent (side view, facing right) ---------- */
 
-function serpent(k: Kit, state: GameState, phase: number) {
+function serpent(k: Kit, state: GameState, phase: number, drive?: Drive) {
   const { ops, c, p, b } = k;
   const N = 16;
   const spacing = 17 * p.shoulders;
@@ -263,7 +321,13 @@ function serpent(k: Kit, state: GameState, phase: number) {
     freq = 2;
   } else if (state === "jump") rise = Math.max(0, Math.sin(phase)) * 90;
   else if (state === "attack") strike = Math.pow(Math.max(0, Math.sin(phase)), 3);
-  const raise = 110 * p.legs + strike * 30;
+  if (drive) {
+    // Arms raise the head; a reaching hand strikes; leaning sways the body
+    strike = Math.pow(drive.reach, 2);
+    amp = 10 + Math.abs(drive.lean) * 0.6;
+    rise = Math.max(0, drive.rise) * 0.6;
+  }
+  const raise = Math.max(30, 110 * p.legs + strike * 30 + (drive ? drive.armsUp * 70 - Math.max(0, -drive.rise) * 0.8 : 0));
   const thick = (i: number) => base * (1 - (i / N) * 0.75);
   const pts: P[] = [];
   for (let i = 0; i < N; i++) {
@@ -273,7 +337,7 @@ function serpent(k: Kit, state: GameState, phase: number) {
     if (i < 5) {
       const h = Math.pow(1 - i / 5, 2);
       y -= raise * h;
-      x += strike * 70 * h;
+      x += strike * 70 * h + (drive ? (drive.shift + drive.head.dx * 0.5) * h : 0);
     }
     y -= rise * Math.sin(Math.PI * Math.min(1, (i + 2) / (N + 2)));
     pts.push({ x, y });
@@ -297,7 +361,7 @@ function serpent(k: Kit, state: GameState, phase: number) {
 
 /* ---------- Floater ---------- */
 
-function floater(k: Kit, state: GameState, phase: number) {
+function floater(k: Kit, state: GameState, phase: number, drive?: Drive) {
   const { ops, c, p, b } = k;
   let bob = Math.sin(phase) * 14;
   let drift = 0;
@@ -311,6 +375,12 @@ function floater(k: Kit, state: GameState, phase: number) {
     bob = Math.sin(phase * 2) * 6;
   } else if (state === "jump") bob = -Math.max(0, Math.sin(phase)) * 70;
   else if (state === "attack") pulse = Math.pow(Math.max(0, Math.sin(phase)), 2);
+  if (drive) {
+    drift = drive.shift;
+    bob = -drive.rise * 0.8 + Math.sin(phase) * 6;
+    tilt = drive.lean * 0.6;
+    pulse = Math.max(0, drive.reach - 0.5) * 2;
+  }
   const C = { x: 200 + drift, y: 230 + bob };
   const rx = 70 * p.shoulders * (1 + pulse * 0.15);
   const ry = 56 * b * (1 + pulse * 0.15);
@@ -351,6 +421,14 @@ function floater(k: Kit, state: GameState, phase: number) {
   if (["human", "claws", "blade"].includes(k.parts.arms)) {
     for (const s of [-1, 1]) {
       const sh = { x: C.x + s * rx * 0.85, y: C.y + 4 };
+      if (drive) {
+        // The floater's own arms copy the rig's hands (front view, like the rig)
+        const l = drive.front[s < 0 ? 1 : 0];
+        const ha = { x: sh.x + s * 32 + l.dx * 0.5, y: sh.y + 60 + l.dy * 0.5 };
+        const el = { x: (sh.x + ha.x) / 2 + s * 14, y: (sh.y + ha.y) / 2 };
+        drawArm(k, sh, el, ha);
+        continue;
+      }
       const el = { x: sh.x + s * 26, y: sh.y + 30 + Math.sin(phase + s) * 6 };
       const ha = { x: el.x + s * 6, y: el.y + 30 };
       drawArm(k, sh, el, ha);

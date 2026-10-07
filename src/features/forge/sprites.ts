@@ -1,7 +1,8 @@
-import type { CharacterLook } from "../../types";
-import { drawOps } from "../../project/forge/figure";
-import { FLOOR } from "../../project/forge/draw";
-import { GAME_STATES, drawCharacter, planOf, stateSeconds, type GameState } from "../../project/forge/plans";
+import type { CharacterLook, RigClip } from "../../types";
+import { drawOps, type DrawOp } from "../../project/forge/figure";
+import { FLOOR, TAU } from "../../project/forge/draw";
+import { GAME_STATES, drawCharacter, drawClip, isPerformance, planOf, stateForClip, stateSeconds, type GameState } from "../../project/forge/plans";
+import { clipLength } from "../../project/rig";
 import { makeZip } from "../../lib/zip";
 
 /*
@@ -14,6 +15,8 @@ import { makeZip } from "../../lib/zip";
 
 export interface SpriteOptions {
   states: GameState[];
+  /** Motion clips to add as extra animations */
+  clips?: RigClip[];
   /** Longest side of one frame, in pixels */
   frameSize: number;
   fps: number;
@@ -24,7 +27,7 @@ export interface SpriteSheet {
   canvas: HTMLCanvasElement;
   cell: { w: number; h: number };
   columns: number;
-  rows: { state: GameState; frames: number }[];
+  rows: { name: string; label: string; frames: number }[];
   /** Feet position inside a cell, 0-1 */
   anchor: { x: number; y: number };
   atlas: object;
@@ -35,14 +38,49 @@ export interface SpriteSheet {
 const WIN = { x: -260, y: -260, w: 920, h: 820 };
 const MEASURE_SCALE = 0.5;
 
-function framesFor(state: GameState, fps: number) {
-  const seconds = stateSeconds(state);
+interface Row {
+  name: string;
+  label: string;
+  seconds: number;
+  draw: (t: number) => DrawOp[];
+}
+
+/** How long one loop of a clip lasts. */
+export function clipSeconds(look: CharacterLook, clip: RigClip) {
+  if (isPerformance(clip)) return clipLength(clip);
+  if (clip.motion && planOf(look) !== "biped") return stateSeconds(stateForClip(clip));
+  // One full cycle of the procedural motion (the rig advances 3 * speed rad/s)
+  if (clip.motion) return Math.min(4, TAU / (3 * Math.max(0.1, clip.speed)));
+  return 0.5;
+}
+
+const slugify = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+
+function rowsFor(look: CharacterLook, opts: SpriteOptions): Row[] {
+  const rows: Row[] = GAME_STATES.filter((s) => opts.states.includes(s.id)).map((s) => ({
+    name: s.id,
+    label: s.label,
+    seconds: s.seconds,
+    draw: (t) => drawCharacter(look, s.id, t, true),
+  }));
+  const taken = new Set(rows.map((r) => r.name));
+  for (const clip of opts.clips ?? []) {
+    let name = slugify(clip.name) || "clip";
+    for (let n = 2; taken.has(name); n++) name = `${slugify(clip.name) || "clip"}-${n}`;
+    taken.add(name);
+    const seconds = clipSeconds(look, clip);
+    rows.push({ name, label: clip.name, seconds, draw: (t) => drawClip(look, clip, t, seconds) });
+  }
+  return rows;
+}
+
+function framesFor(seconds: number, fps: number) {
   const count = Math.max(2, Math.round(seconds * fps));
   return Array.from({ length: count }, (_, i) => (i * seconds) / count);
 }
 
 /** Bounding box (rig space) of everything drawn across all frames. */
-function measure(look: CharacterLook, opts: SpriteOptions) {
+function measure(rows: Row[], fps: number) {
   const canvas = document.createElement("canvas");
   canvas.width = Math.ceil(WIN.w * MEASURE_SCALE);
   canvas.height = Math.ceil(WIN.h * MEASURE_SCALE);
@@ -51,12 +89,12 @@ function measure(look: CharacterLook, opts: SpriteOptions) {
   let minY = Infinity;
   let maxX = -Infinity;
   let maxY = -Infinity;
-  for (const state of opts.states) {
-    for (const t of framesFor(state, opts.fps)) {
+  for (const row of rows) {
+    for (const t of framesFor(row.seconds, fps)) {
       ctx.setTransform(1, 0, 0, 1, 0, 0);
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       ctx.setTransform(MEASURE_SCALE, 0, 0, MEASURE_SCALE, -WIN.x * MEASURE_SCALE, -WIN.y * MEASURE_SCALE);
-      drawOps(ctx, drawCharacter(look, state, t, true));
+      drawOps(ctx, row.draw(t));
       const { data, width, height } = ctx.getImageData(0, 0, canvas.width, canvas.height);
       for (let y = 0; y < height; y++) {
         for (let x = 0; x < width; x++) {
@@ -80,12 +118,12 @@ function measure(look: CharacterLook, opts: SpriteOptions) {
 }
 
 export async function renderSpriteSheet(look: CharacterLook, opts: SpriteOptions): Promise<SpriteSheet> {
-  const states = GAME_STATES.map((s) => s.id).filter((s) => opts.states.includes(s));
-  if (!states.length) throw new Error("Pick at least one animation.");
-  const box = measure(look, { ...opts, states });
+  const defs = rowsFor(look, opts);
+  if (!defs.length) throw new Error("Pick at least one animation.");
+  const box = measure(defs, opts.fps);
   const scale = opts.frameSize / Math.max(box.w, box.h);
   const cell = { w: Math.ceil(box.w * scale), h: Math.ceil(box.h * scale) };
-  const rows = states.map((state) => ({ state, times: framesFor(state, opts.fps) }));
+  const rows = defs.map((d) => ({ ...d, times: framesFor(d.seconds, opts.fps) }));
   const columns = Math.max(...rows.map((r) => r.times.length));
 
   const canvas = document.createElement("canvas");
@@ -99,8 +137,8 @@ export async function renderSpriteSheet(look: CharacterLook, opts: SpriteOptions
   let index = 0;
 
   rows.forEach((row, r) => {
-    animations[row.state] = [];
-    frameTags.push({ name: row.state, from: index, to: index + row.times.length - 1, direction: "forward" });
+    animations[row.name] = [];
+    frameTags.push({ name: row.name, from: index, to: index + row.times.length - 1, direction: "forward" });
     row.times.forEach((t, c) => {
       const flip = opts.facing === "left";
       ctx.save();
@@ -108,10 +146,10 @@ export async function renderSpriteSheet(look: CharacterLook, opts: SpriteOptions
       ctx.rect(c * cell.w, r * cell.h, cell.w, cell.h);
       ctx.clip();
       ctx.setTransform(flip ? -scale : scale, 0, 0, scale, flip ? c * cell.w + cell.w + box.x * scale : c * cell.w - box.x * scale, r * cell.h - box.y * scale);
-      drawOps(ctx, drawCharacter(look, row.state, t, true));
+      drawOps(ctx, row.draw(t));
       ctx.restore();
-      const name = `${row.state}_${String(c).padStart(2, "0")}`;
-      animations[row.state].push(name);
+      const name = `${row.name}_${String(c).padStart(2, "0")}`;
+      animations[row.name].push(name);
       frames[name] = {
         frame: { x: c * cell.w, y: r * cell.h, w: cell.w, h: cell.h },
         rotated: false,
@@ -144,12 +182,12 @@ export async function renderSpriteSheet(look: CharacterLook, opts: SpriteOptions
         fps: opts.fps,
         cell,
         columns,
-        rows: rows.map((r, i) => ({ state: r.state, row: i, frames: r.times.length, loop: true })),
+        rows: rows.map((r, i) => ({ name: r.name, label: r.label, row: i, frames: r.times.length, seconds: r.seconds, loop: true })),
         anchor,
       },
     },
   };
-  return { canvas, cell, columns, rows: rows.map((r) => ({ state: r.state, frames: r.times.length })), anchor, atlas, baseName: slug };
+  return { canvas, cell, columns, rows: rows.map((r) => ({ name: r.name, label: r.label, frames: r.times.length })), anchor, atlas, baseName: slug };
 }
 
 export function sheetPng(sheet: SpriteSheet): Promise<Blob> {
@@ -158,7 +196,7 @@ export function sheetPng(sheet: SpriteSheet): Promise<Blob> {
 
 export function readme(sheet: SpriteSheet, fps: number) {
   const { cell, columns, rows, baseName, anchor } = sheet;
-  const rowList = rows.map((r, i) => `  row ${i}: ${r.state} (${r.frames} frames)`).join("\n");
+  const rowList = rows.map((r, i) => `  row ${i}: ${r.name} (${r.frames} frames)`).join("\n");
   return `${baseName} — exported from ZH-art
 
 Files
@@ -172,8 +210,8 @@ Anchor (where the feet touch the ground), as a fraction of the cell: x ${anchor.
 
 Phaser 3
   this.load.atlas("${baseName}", "${baseName}.png", "${baseName}.json");
-  // then for each animation, e.g. "${rows[0].state}":
-  this.anims.create({ key: "${rows[0].state}", frames: this.anims.generateFrameNames("${baseName}", { prefix: "${rows[0].state}_", end: ${rows[0].frames - 1}, zeroPad: 2 }), frameRate: ${fps}, repeat: -1 });
+  // then for each animation, e.g. "${rows[0].name}":
+  this.anims.create({ key: "${rows[0].name}", frames: this.anims.generateFrameNames("${baseName}", { prefix: "${rows[0].name}_", end: ${rows[0].frames - 1}, zeroPad: 2 }), frameRate: ${fps}, repeat: -1 });
   sprite.setOrigin(${anchor.x}, ${anchor.y});
 
 Godot 4

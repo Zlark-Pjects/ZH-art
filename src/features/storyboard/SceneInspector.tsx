@@ -5,6 +5,7 @@ import type { Studio } from "../useStudio";
 import { Button, ColorField, Field, IconButton, Notice, Section, Segmented, Slider, cx, inputClass } from "../../ui";
 import type { StageSelection } from "./StoryboardStage";
 import { TRANSITIONS } from "../timeline/timeline";
+import { CameraKeys, CameraModeSwitch } from "./CameraKeys";
 
 export const CAMERA_PRESETS: Record<CameraMotion["type"], { label: string; motion: Omit<CameraMotion, "type" | "speed"> }> = {
   "zoom-in": { label: "Push in", motion: { scaleStart: 1, scaleEnd: 1.18, xStart: 0, xEnd: 0, yStart: 0, yEnd: 0 } },
@@ -33,11 +34,13 @@ export function SceneInspector({
   selection,
   setSelection,
   onNavigate,
+  onCameraPreview,
 }: {
   studio: Studio;
   selection: StageSelection;
   setSelection: (s: StageSelection) => void;
   onNavigate: (view: "characters" | "rig") => void;
+  onCameraPreview: (on: boolean) => void;
 }) {
   const index = studio.playback.sceneIndex;
   const scene = studio.board.scenes[index];
@@ -120,8 +123,13 @@ export function SceneInspector({
         </div>
       </Section>
 
-      <Section title="Camera">
+      <Section title="Camera" aside={scene.cameraKeys?.length ? `${scene.cameraKeys.length} keys` : CAMERA_PRESETS[scene.cameraMotion.type].label}>
         <div className="flex flex-col gap-4">
+          <CameraModeSwitch studio={studio} index={index} onPreview={onCameraPreview} />
+          {scene.cameraKeys?.length ? (
+            <CameraKeys studio={studio} index={index} onPreview={onCameraPreview} />
+          ) : (
+          <>
           <Segmented
             label="Move"
             value={scene.cameraMotion.type}
@@ -137,6 +145,8 @@ export function SceneInspector({
             <Slider label="Rise from" value={scene.cameraMotion.yStart} min={-40} max={40} onChange={(v) => setCamera({ yStart: v })} />
             <Slider label="Rise to" value={scene.cameraMotion.yEnd} min={-40} max={40} onChange={(v) => setCamera({ yEnd: v })} />
           </div>
+          </>
+          )}
         </div>
       </Section>
 
