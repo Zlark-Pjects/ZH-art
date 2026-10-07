@@ -19,7 +19,7 @@ for (const q of queries) {
     const source = r.source || r.provider;
     let verdict;
     try {
-      const f = await fetch(r.url, { headers: { Origin: "https://zh-art.example", Range: "bytes=0-1" }, redirect: "follow" });
+      const f = await fetch(r.url, { headers: { Origin: "https://zh-art.example" }, redirect: "follow" });
       const allow = f.headers.get("access-control-allow-origin");
       verdict = f.ok && (allow === "*" || allow === "https://zh-art.example") ? "direct" : `blocked (HTTP ${f.status}, CORS ${allow ?? "none"})`;
       await f.body?.cancel();

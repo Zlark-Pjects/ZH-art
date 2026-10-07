@@ -57,8 +57,10 @@ test("search free music, add a track with its credit, and handle a host that ref
   expect(q.searchParams.get("category")).toBe("music");
   expect(q.searchParams.get("license")!.split(",")).toEqual(["cc0", "pdm", "by", "by-sa"]);
 
-  await results.getByRole("button", { name: "Use Locked Track" }).click();
-  await expect(results.getByText(/doesn't let other sites download this track directly/)).toBeVisible();
+  // The host that refuses downloads is detected up front and offered as a link, listed after one-click tracks
+  const getIt = results.getByRole("link", { name: "Get Locked Track from Jamendo" });
+  await expect(getIt).toHaveAttribute("href", "https://example.org/track/2");
+  await expect(results.getByRole("listitem").first()).toContainText("Moonlit Drift");
 
   await results.getByRole("button", { name: "Use Moonlit Drift" }).click();
   await expect(sb.getByText(/Moonlit Drift — Test Artist · 1(19|20|21) bpm/).first()).toBeVisible({ timeout: 20_000 });

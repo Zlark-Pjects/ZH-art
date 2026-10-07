@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { ExternalLink, Loader2, Pause, Play, Plus, Search } from "lucide-react";
-import { LICENSE_LABEL, OpenverseError, creditFor, downloadTrack, searchMusic, type FreeTrack } from "../../lib/openverse";
+import { LICENSE_LABEL, OpenverseError, canDownload, downloadTrack, searchMusic, type FreeTrack } from "../../lib/openverse";
 import { Button, Chip, Notice, cx, inputClass } from "../../ui";
 
 const MOODS = ["cinematic", "ambient", "piano", "electronic", "lofi", "epic", "acoustic", "chiptune"];
@@ -23,6 +23,8 @@ export function MusicBrowser({ onUse, busy }: { onUse: (file: File, track: FreeT
   const [rowError, setRowError] = useState<{ id: string; message: string; url: string } | null>(null);
   const [playing, setPlaying] = useState<string | null>(null);
   const [adding, setAdding] = useState<string | null>(null);
+  // Which tracks this page may download: true / false once checked
+  const [direct, setDirect] = useState<Record<string, boolean>>({});
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const abortRef = useRef<AbortController | null>(null);
 
@@ -44,6 +46,18 @@ export function MusicBrowser({ onUse, busy }: { onUse: (file: File, track: FreeT
     try {
       const out = await searchMusic(q, { page: nextPage, commercial, signal: controller.signal });
       setTracks((prev) => (nextPage === 1 ? out.tracks : [...prev, ...out.tracks]));
+      if (nextPage === 1) setDirect({});
+      // Check each result's host a few at a time, so one-click tracks can be listed first
+      const queue = [...out.tracks];
+      const worker = async () => {
+        for (let t = queue.shift(); t; t = queue.shift()) {
+          const ok = await canDownload(t, controller.signal);
+          if (controller.signal.aborted) return;
+          const id = t.id;
+          setDirect((d) => ({ ...d, [id]: ok }));
+        }
+      };
+      Promise.all([worker(), worker(), worker(), worker()]).catch(() => undefined);
       setPage(nextPage);
       setPages(out.pages);
       if (nextPage === 1 && !out.tracks.length) setError(`Nothing found for “${q}”. Try a mood or a genre.`);
@@ -135,7 +149,7 @@ export function MusicBrowser({ onUse, busy }: { onUse: (file: File, track: FreeT
 
       {tracks.length > 0 && (
         <ul className="flex flex-col divide-y divide-line border-y border-line" aria-label="Free music results">
-          {tracks.map((t) => (
+          {[...tracks].sort((a, b) => Number(direct[b.id] === true) - Number(direct[a.id] === true)).map((t) => (
             <li key={t.id} className="py-2.5">
               <div className="flex items-center gap-2">
                 <button
@@ -153,9 +167,29 @@ export function MusicBrowser({ onUse, busy }: { onUse: (file: File, track: FreeT
                     {t.duration ? ` · ${mmss(t.duration)}` : ""} · {t.provider}
                   </p>
                 </div>
-                <Button size="sm" variant="secondary" icon={adding === t.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />} disabled={busy || adding !== null} onClick={() => use(t)} aria-label={`Use ${t.title}`}>
-                  Use
-                </Button>
+                {direct[t.id] === false ? (
+                  <a
+                    href={t.sourceUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    aria-label={`Get ${t.title} from ${t.provider}`}
+                    title={`${t.provider} doesn't let other sites download this one. Download it there, then add it with “Add a song”.`}
+                    className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-[3px] px-3 text-[13px] text-muted hover:bg-fg/[0.05] hover:text-fg"
+                  >
+                    Get it <ExternalLink className="h-3.5 w-3.5" />
+                  </a>
+                ) : (
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    icon={adding === t.id || direct[t.id] === undefined ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />}
+                    disabled={busy || adding !== null || direct[t.id] === undefined}
+                    onClick={() => use(t)}
+                    aria-label={`Use ${t.title}`}
+                  >
+                    Use
+                  </Button>
+                )}
               </div>
               {rowError?.id === t.id && (
                 <p className="mt-2 text-xs leading-relaxed text-danger">
@@ -175,7 +209,7 @@ export function MusicBrowser({ onUse, busy }: { onUse: (file: File, track: FreeT
         </Button>
       )}
       <p className="text-xs leading-relaxed text-faint">
-        From <a href="https://openverse.org" target="_blank" rel="noreferrer" className="underline underline-offset-2">Openverse</a>: Creative Commons and public-domain music. Tracks that forbid changes (ND) are never shown, since putting music to video counts as a change. Credit the artist when you share your film; the credit is saved with the song.
+        From <a href="https://openverse.org" target="_blank" rel="noreferrer" className="underline underline-offset-2">Openverse</a>: Creative Commons and public-domain music. Tracks that forbid changes (ND) are never shown, since putting music to video counts as a change. Credit the artist when you share your film; the credit is saved with the song. Some hosts don't let other sites download their files: those tracks show “Get it”; download there, then use “Add a song”.
       </p>
     </div>
   );

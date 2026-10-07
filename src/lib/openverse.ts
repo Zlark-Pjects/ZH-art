@@ -106,6 +106,21 @@ export function creditFor(t: FreeTrack): MusicCredit {
   };
 }
 
+/**
+ * Whether a track's host lets this page download it (CORS). Many Jamendo
+ * files do and many don't; asking first tells us before "Use" fails.
+ */
+export async function canDownload(t: FreeTrack, signal?: AbortSignal): Promise<boolean> {
+  try {
+    // A plain request (no extra headers, so no CORS preflight), cancelled as soon as it answers
+    const res = await fetch(t.url, { signal, mode: "cors" });
+    await res.body?.cancel().catch(() => undefined);
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
 /** Download a track's audio as a File, ready for the music track. */
 export async function downloadTrack(t: FreeTrack, signal?: AbortSignal): Promise<File> {
   let res: Response;
