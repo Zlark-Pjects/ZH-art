@@ -1,4 +1,4 @@
-import type { CharacterBuild, CharacterLook, CharacterPalette, CharacterProportions, PartSlot } from "../../types";
+import type { BodyPlan, CharacterBuild, CharacterLook, CharacterPalette, CharacterProportions, PartSlot } from "../../types";
 import { SLOTS } from "./figure";
 
 /*
@@ -72,6 +72,7 @@ export interface Archetype {
   label: string;
   description: string;
   weights: Weights;
+  plans: Partial<Record<BodyPlan, number>>;
   proportions: Record<keyof CharacterProportions, [number, number]>;
   palette: (r: Rng) => CharacterPalette;
   syllables: string[];
@@ -101,6 +102,7 @@ export const ARCHETYPES: Archetype[] = [
     label: "Anything",
     description: "Every part and colour is fair game",
     weights: {},
+    plans: { biped: 3, quadruped: 2, flyer: 1.5, serpent: 1.5, floater: 1.5 },
     proportions: P([0.6, 1.8], [0.7, 1.5], [0.6, 1.6], [0.5, 1.5], [0.6, 1.8]),
     palette: (r) => scheme(r, r.range(0, 360), [35, 85], [30, 60], r.chance(0.3)),
     syllables: ["zo", "ra", "kai", "vex", "lu", "mor", "ith", "qua", "nel", "dra", "yo", "pim"],
@@ -114,6 +116,7 @@ export const ARCHETYPES: Archetype[] = [
       headgear: { none: 4, crown: 2, horns: 1, crest: 2 }, arms: { human: 6, mech: 1 }, legs: { human: 6, mech: 1 },
       back: { cape: 6, none: 2, feathers: 1 }, tail: { none: 10 }, prop: { sword: 5, shield: 4, staff: 1 },
     },
+    plans: { biped: 9, quadruped: 1 },
     proportions: P([0.85, 1.1], [1.0, 1.35], [0.9, 1.1], [0.9, 1.15], [1.0, 1.4]),
     palette: (r) => scheme(r, r.range(0, 360), [30, 55], [28, 42], true),
     syllables: ["al", "dric", "ber", "wyn", "ga", "len", "ros", "mund", "hel", "ard", "is", "ten"],
@@ -127,6 +130,7 @@ export const ARCHETYPES: Archetype[] = [
       headgear: { "cat-ears": 4, horns: 3, antlers: 3, "long-ears": 2, none: 1 }, arms: { claws: 6, human: 2 }, legs: { beast: 7, hooves: 3 },
       back: { none: 6, bat: 1, feathers: 1 }, tail: { long: 3, fluffy: 4, spiked: 2 }, prop: { none: 8 },
     },
+    plans: { quadruped: 6, biped: 3, serpent: 1 },
     proportions: P([0.9, 1.3], [1.0, 1.4], [0.8, 1.2], [0.7, 1.05], [1.1, 1.7]),
     palette: (r) => scheme(r, r.pick([20, 30, 40, 90, 120, 200]) + r.range(-10, 10), [30, 60], [30, 50], false),
     syllables: ["gr", "ok", "tha", "rum", "bar", "ka", "fen", "ur", "sha", "rak", "mo", "gor"],
@@ -140,6 +144,7 @@ export const ARCHETYPES: Archetype[] = [
       headgear: { halo: 5, antenna: 1, none: 3, "long-ears": 1 }, arms: { tentacle: 3, human: 3, none: 2 }, legs: { wisp: 8, human: 1 },
       back: { crystals: 4, insect: 3, none: 2 }, tail: { ribbon: 5, none: 4 }, prop: { orb: 4, lantern: 4, none: 2 },
     },
+    plans: { floater: 6, biped: 2, serpent: 1, flyer: 1 },
     proportions: P([0.8, 1.4], [0.7, 1.0], [0.9, 1.4], [0.8, 1.2], [0.6, 0.9]),
     palette: (r) => scheme(r, r.range(170, 300), [45, 80], [45, 65], false),
     syllables: ["ae", "li", "sol", "vi", "ra", "mi", "lune", "el", "is", "the", "ria", "nyx"],
@@ -153,6 +158,7 @@ export const ARCHETYPES: Archetype[] = [
       headgear: { antenna: 5, crest: 2, none: 3 }, arms: { mech: 7, blade: 3 }, legs: { mech: 8, arachnid: 2 },
       back: { jetpack: 5, none: 3, crystals: 1 }, tail: { none: 6, spiked: 1, scorpion: 1 }, prop: { none: 4, shield: 2, orb: 2 },
     },
+    plans: { biped: 5, quadruped: 3, flyer: 1, floater: 1 },
     proportions: P([0.7, 1.1], [1.0, 1.5], [0.9, 1.3], [0.8, 1.2], [0.8, 1.3]),
     palette: (r) => {
       const p = scheme(r, r.range(0, 360), [5, 18], [30, 48], false);
@@ -171,6 +177,7 @@ export const ARCHETYPES: Archetype[] = [
       headgear: { antenna: 7, crest: 2, horns: 1 }, arms: { claws: 4, blade: 4, tentacle: 1 }, legs: { arachnid: 6, human: 2, mech: 1 },
       back: { insect: 8, none: 1 }, tail: { scorpion: 3, none: 5, spiked: 1 }, prop: { none: 8 },
     },
+    plans: { biped: 3, quadruped: 2, serpent: 2, flyer: 2 },
     proportions: P([0.7, 1.1], [0.7, 1.1], [1.0, 1.6], [0.8, 1.3], [0.6, 0.9]),
     palette: (r) => scheme(r, r.pick([80, 110, 160, 280, 40]) + r.range(-15, 15), [55, 85], [30, 50], false),
     syllables: ["zz", "chi", "tik", "vri", "sk", "kla", "zi", "ix", "chit", "rr", "ki", "ess"],
@@ -184,6 +191,7 @@ export const ARCHETYPES: Archetype[] = [
       headgear: { halo: 4, crown: 4, "long-ears": 1 }, arms: { human: 6, none: 1 }, legs: { human: 4, wisp: 3 },
       back: { feathers: 7, crystals: 2 }, tail: { none: 7, ribbon: 3 }, prop: { staff: 5, orb: 3, lantern: 1 },
     },
+    plans: { biped: 5, flyer: 3, floater: 2 },
     proportions: P([0.85, 1.1], [0.85, 1.15], [0.95, 1.2], [1.0, 1.35], [0.7, 1.0]),
     palette: (r) => {
       const p = scheme(r, r.range(215, 260), [40, 70], [22, 38], r.chance(0.4));
@@ -223,7 +231,17 @@ function tidy(parts: Record<PartSlot, string>): Record<PartSlot, string> {
 
 const ALL_SLOTS = SLOTS.map((s) => s.slot);
 
-export type LockKey = PartSlot | "colours" | "proportions";
+export type LockKey = PartSlot | "colours" | "proportions" | "plan";
+
+function pickPlan(r: Rng, arch: Archetype): BodyPlan {
+  const entries = Object.entries(arch.plans) as [BodyPlan, number][];
+  let roll = r.next() * entries.reduce((sum, [, w]) => sum + w, 0);
+  for (const [plan, w] of entries) {
+    roll -= w;
+    if (roll <= 0) return plan;
+  }
+  return "biped";
+}
 
 function clampProportions(p: CharacterProportions): CharacterProportions {
   const c = (v: number, lo: number, hi: number) => Math.round(Math.max(lo, Math.min(hi, v)) * 100) / 100;
@@ -242,7 +260,8 @@ export function randomBuild(seed: number, archetypeId: string, base?: CharacterB
       ? base.proportions
       : clampProportions(Object.fromEntries(Object.entries(arch.proportions).map(([k, [lo, hi]]) => [k, r.range(lo, hi)])) as unknown as CharacterProportions);
   const palette = base && locks.has("colours") ? base.palette : arch.palette(r);
-  return { seed, archetype: arch.id, parts: tidy(parts), proportions, palette };
+  const plan = base && locks.has("plan") ? base.plan ?? "biped" : pickPlan(r, arch);
+  return { seed, archetype: arch.id, plan, parts: tidy(parts), proportions, palette };
 }
 
 /** Change a design a little (one part, small shifts) or a lot (several parts, new colours). */
@@ -269,7 +288,8 @@ export function mutate(build: CharacterBuild, strength: "small" | "wild", seed: 
       palette = Object.fromEntries(Object.entries(build.palette).map(([k, v]) => [k, k === "skin" && r.chance(0.6) ? v : shiftHue(v, shift)])) as unknown as CharacterPalette;
     }
   }
-  return { seed, archetype: build.archetype, parts: tidy(parts), proportions, palette };
+  const plan = !locks.has("plan") && strength === "wild" && r.chance(0.3) ? pickPlan(r, ARCHETYPES[0]) : build.plan ?? "biped";
+  return { seed, archetype: build.archetype, plan, parts: tidy(parts), proportions, palette };
 }
 
 /** Offspring of two designs: each slot from one parent, blended proportions and colours. */
@@ -286,7 +306,8 @@ export function breed(a: CharacterBuild, b: CharacterBuild, seed: number, locks:
   const palette = locks.has("colours")
     ? base.palette
     : (Object.fromEntries((Object.keys(a.palette) as (keyof CharacterPalette)[]).map((k) => [k, r.chance(0.5) ? a.palette[k] : b.palette[k]])) as unknown as CharacterPalette);
-  return { seed, archetype: r.chance(0.5) ? a.archetype : b.archetype, parts: tidy(parts), proportions, palette };
+  const plan = locks.has("plan") ? base.plan ?? "biped" : r.chance(0.5) ? a.plan ?? "biped" : b.plan ?? "biped";
+  return { seed, archetype: r.chance(0.5) ? a.archetype : b.archetype, plan, parts: tidy(parts), proportions, palette };
 }
 
 /* ---------- Names ---------- */

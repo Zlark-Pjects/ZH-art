@@ -161,7 +161,7 @@ function Guide({ onClose }: { onClose: () => void }) {
   const items = [
     ["Storyboard", "Write an idea and build: the composer reads places and things in it and lays out scenes, colours, camera moves and a score. Then edit anything — words, timing, palette, camera, shapes (drag them on the picture), particles, a backdrop photo, and cast."],
     ["Looks", "A library of colour and atmosphere. Preview one on the current scene, then apply it to every scene at once."],
-    ["Characters", "Forge whole characters from parts — bodies, heads, eyes, wings, tails, props — or let the generator surprise you: pick an archetype, mutate, breed two designs, and lock what you like. The portrait studio handles faces and the film's colour grade."],
+    ["Characters", "Forge whole characters from parts — bodies, heads, eyes, wings, tails, props — on two legs, four legs, wings, a serpent's coil or floating — or let the generator surprise you: pick an archetype, mutate, breed two designs, and lock what you like. Export any character as a game sprite sheet with idle, walk, run, jump and attack loops. The portrait studio handles faces and the film's colour grade."],
     ["Motion rig", "Pose a skeleton, layer a motion like a run or a float, record keyframes, or act it out on your webcam — motion capture runs on your device and the video never leaves the browser. Save the result as a clip to cast in any scene."],
     ["Edit & export", "Reorder scenes, start from templates, and record the finished film with its score to a video file."],
   ];

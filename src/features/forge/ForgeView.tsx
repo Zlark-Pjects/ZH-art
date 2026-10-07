@@ -1,21 +1,18 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Dices, Dna, Lock, Redo2, RefreshCw, Shuffle, Sparkles, Undo2, Unlock } from "lucide-react";
-import type { CharacterBuild, CharacterLook, CharacterPalette, MotionId, PartSlot, RigClip } from "../../types";
-import { DEFAULT_CLIP, MOTION_PRESETS, poseAt } from "../../project/rig";
-import { SLOTS, buildFigure, buildOf } from "../../project/forge/figure";
+import type { BodyPlan, CharacterBuild, CharacterLook, CharacterPalette, PartSlot } from "../../types";
+import { SLOTS, buildOf } from "../../project/forge/figure";
+import { BODY_PLANS, GAME_STATES, drawCharacter, type GameState } from "../../project/forge/plans";
 import { ARCHETYPES, breed, lookFromBuild, mutate, nameFor, newSeed, randomBuild, type LockKey } from "../../project/forge/generate";
 import { newId } from "../../project/storage";
 import { Button, ColorField, Field, IconButton, Notice, RailTabs, Section, Segmented, Slider, StudioLayout, cx, inputClass } from "../../ui";
 import { FilmGate } from "../../ui/FilmGate";
 import { FigureOps } from "./FigureSvg";
-
-const PREVIEW_CLIPS: Record<MotionId, RigClip> = Object.fromEntries(
-  MOTION_PRESETS.map((m) => [m.id, { ...DEFAULT_CLIP, id: `preview_${m.id}`, name: m.name, motion: m.id, intensity: m.id === "run" ? 0.8 : 1 }]),
-) as Record<MotionId, RigClip>;
+import { SpriteExport } from "./SpriteExport";
 
 /** A character drawn in a fixed frame that fits wings, tails and props. */
-function Figure({ look, t, motion, className }: { look: CharacterLook; t: number; motion: MotionId; className?: string }) {
-  const ops = useMemo(() => buildFigure(poseAt(PREVIEW_CLIPS[motion], t), look, t), [look, t, motion]);
+export function Figure({ look, t, state, className }: { look: CharacterLook; t: number; state: GameState; className?: string }) {
+  const ops = useMemo(() => drawCharacter(look, state, t), [look, t, state]);
   return (
     <svg viewBox="-160 -110 720 640" className={className} aria-hidden>
       <ellipse cx={200} cy={478} rx={150} ry={16} fill="#000" opacity={0.35} />
@@ -33,7 +30,7 @@ const PALETTE_KEYS: { key: keyof CharacterPalette; label: string }[] = [
   { key: "hair", label: "Hair & fur" },
 ];
 
-type Tab = "generate" | "parts" | "colours";
+type Tab = "generate" | "parts" | "colours" | "export";
 
 export function ForgeView({
   characters,
@@ -50,7 +47,7 @@ export function ForgeView({
   const [archetype, setArchetype] = useState("wild");
   const [locks, setLocks] = useState<Set<LockKey>>(new Set());
   const [tab, setTab] = useState<Tab>("generate");
-  const [motion, setMotion] = useState<MotionId>("idle");
+  const [motion, setMotion] = useState<GameState>("idle");
   const [name, setName] = useState(() => nameFor(first));
   const [editingId, setEditingId] = useState<string | null>(null);
   const [mate, setMate] = useState<string>("");
@@ -127,12 +124,12 @@ export function ForgeView({
     <>
     <FilmGate slate={name || "Unnamed"} meta={`${ARCHETYPES.find((a) => a.id === build.archetype)?.label ?? "Custom"} · seed ${build.seed}`}>
       <div className="relative h-full w-full bg-[radial-gradient(90%_80%_at_50%_45%,#1d1c22_0%,#08080a_70%)]">
-        <Figure look={look} t={t} motion={motion} className="absolute inset-0 h-full w-full" />
+        <Figure look={look} t={t} state={motion} className="absolute inset-0 h-full w-full" />
       </div>
     </FilmGate>
       <div className="mt-3 flex justify-start overflow-x-auto sm:justify-center">
           <div role="radiogroup" aria-label="Preview motion" className="flex shrink-0 gap-1 rounded-full border border-line p-1">
-            {MOTION_PRESETS.map((m) => (
+            {GAME_STATES.map((m) => (
               <button
                 key={m.id}
                 type="button"
@@ -141,7 +138,7 @@ export function ForgeView({
                 onClick={() => setMotion(m.id)}
                 className={cx("whitespace-nowrap rounded-full px-3 py-1 text-[12px] transition-colors", motion === m.id ? "bg-fg text-ink" : "text-muted hover:text-fg")}
               >
-                {m.name}
+                {m.label}
               </button>
             ))}
           </div>
@@ -175,7 +172,7 @@ export function ForgeView({
                 aria-pressed={current}
                 className={cx("group block w-full rounded-[3px] bg-surface text-left ring-1 transition-shadow", current ? "ring-fg/70" : "ring-line hover:ring-line-strong")}
               >
-                <Figure look={candidateLook} t={0} motion="idle" className="aspect-[9/8] w-full" />
+                <Figure look={candidateLook} t={0} state="idle" className="aspect-[9/8] w-full" />
                 <p className={cx("truncate px-2 pb-2 text-[12px]", current ? "text-fg" : "text-muted group-hover:text-fg")}>{candidateLook.name}</p>
               </button>
             </li>
@@ -196,8 +193,11 @@ export function ForgeView({
           { value: "generate", label: "Generate" },
           { value: "parts", label: "Parts" },
           { value: "colours", label: "Colours" },
+          { value: "export", label: "Export" },
         ]}
       />
+
+      {tab === "export" && <SpriteExport look={look} />}
 
       {tab === "generate" && (
         <div>
@@ -247,7 +247,17 @@ export function ForgeView({
 
       {tab === "parts" && (
         <div>
-          <Section index="01" title="Parts" aside="Lock to keep">
+          <Section index="01" title="Body plan" aside={<LockButton k="plan" label="body plan" />}>
+            <Segmented
+              label="Skeleton"
+              value={build.plan ?? "biped"}
+              onChange={(plan: BodyPlan) => commit({ ...build, plan }, false)}
+              columns={3}
+              options={BODY_PLANS.map((b) => ({ value: b.id, label: b.label, hint: b.hint }))}
+            />
+            <p className="mt-3 text-xs leading-relaxed text-faint">{BODY_PLANS.find((b) => b.id === (build.plan ?? "biped"))?.hint}.</p>
+          </Section>
+          <Section index="02" title="Parts" aside="Lock to keep">
             <div className="flex flex-col gap-3">
               {SLOTS.map(({ slot, label, options }) => (
                 <div key={slot} className="grid grid-cols-[6rem_1fr_auto] items-center gap-2">
@@ -271,7 +281,7 @@ export function ForgeView({
               ))}
             </div>
           </Section>
-          <Section index="02" title="Proportions" aside={<LockButton k="proportions" label="proportions" />}>
+          <Section index="03" title="Proportions" aside={<LockButton k="proportions" label="proportions" />}>
             <div className="grid grid-cols-2 gap-x-4 gap-y-3">
               {(
                 [
@@ -345,7 +355,7 @@ export function ForgeView({
                       className={cx("flex items-center gap-2 rounded-full border py-1 pl-1 pr-3 text-[13px] transition-colors", c.id === editingId ? "border-fg/70 text-fg" : "border-line text-muted hover:text-fg")}
                     >
                       <span className="h-7 w-7 overflow-hidden rounded-full bg-surface ring-1 ring-fg/15">
-                        <Figure look={c} t={0} motion="idle" className="h-full w-full scale-[2.2] translate-y-[38%]" />
+                        <Figure look={c} t={0} state="idle" className="h-full w-full scale-[2.2] translate-y-[38%]" />
                       </span>
                       {c.name}
                     </button>

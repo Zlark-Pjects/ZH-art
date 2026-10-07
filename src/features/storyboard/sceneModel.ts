@@ -1,6 +1,7 @@
 import type { CharacterLook, ElementSpec, Grade, RigClip, Scene } from "../../types";
 import { RIG_FLOOR, poseAt } from "../../project/rig";
 import { buildFigure, type DrawOp } from "../../project/forge/figure";
+import { drawCharacter, planOf, stateForClip } from "../../project/forge/plans";
 
 /**
  * Pure description of one frame of a storyboard scene, shared by the live SVG
@@ -208,7 +209,8 @@ export function castFigures(scene: Scene, t: number, characters: CharacterLook[]
     const look = characters.find((c) => c.id === member.characterId);
     const clip = clips.find((c) => c.id === member.clipId);
     if (!look || !clip) continue;
-    const ops = buildFigure(poseAt(clip, t), look, t);
+    // Bipeds perform the rig clip; other body plans play the matching game animation
+    const ops = planOf(look) === "biped" ? buildFigure(poseAt(clip, t), look, t) : drawCharacter(look, stateForClip(clip), t);
     const x = (member.x / 100) * FRAME_W;
     const y = (member.y / 100) * FRAME_H;
     // Rig height from head top (~50) to feet maps to `scale` of the frame height

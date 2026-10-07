@@ -83,9 +83,13 @@ export interface CharacterProportions {
   bulk: number; // limb thickness 0.6-1.8
 }
 
+export type BodyPlan = "biped" | "quadruped" | "flyer" | "serpent" | "floater";
+
 export interface CharacterBuild {
   /** The seed this design came from; the same seed and archetype give the same character. */
   seed: number;
+  /** Skeleton type; missing means biped (characters made before body plans existed). */
+  plan?: BodyPlan;
   archetype: string;
   parts: Record<PartSlot, string>;
   proportions: CharacterProportions;
