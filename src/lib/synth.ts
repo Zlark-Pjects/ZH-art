@@ -92,8 +92,8 @@ class SynthEngine {
     
     this.isPlaying = true;
     this.currentVibe = vibe;
-    this.bpm = bpm;
-    this.scale = this.scalesMap[scaleName] || this.scalesMap.pentatonic;
+    this.updateBpm(bpm);
+    this.setScale(scaleName);
     this.beatCallback = onBeat || null;
     this.currentStep = 0;
 
@@ -128,6 +128,10 @@ class SynthEngine {
 
   public updateBpm(bpm: number) {
     this.bpm = Math.max(40, Math.min(220, bpm));
+  }
+
+  public setScale(scaleName: string) {
+    this.scale = this.scalesMap[scaleName] || this.scalesMap.pentatonic;
   }
 
   // Converts MIDI notes to frequencies

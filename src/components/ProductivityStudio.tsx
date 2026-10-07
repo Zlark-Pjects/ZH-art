@@ -69,6 +69,11 @@ export default function ProductivityStudio({
   setPrompt
 }: ProductivityStudioProps) {
   // Current active sub-tab inside Productivity Studio
+  const renderIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  useEffect(() => () => {
+    if (renderIntervalRef.current) clearInterval(renderIntervalRef.current);
+  }, []);
+
   const [activeSubTab, setActiveSubTab] = useState<"sequence" | "templates" | "collab" | "export">("sequence");
   const [statusMessage, setStatusMessage] = useState("");
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
@@ -602,40 +607,45 @@ export default function ProductivityStudio({
       { prg: 100, text: "Muxing video & audio channels into optimized delivery container!" }
     ];
 
+    // Keep the counters outside React state so the updater stays pure
+    // (StrictMode runs state updaters twice in development).
+    let progress = 0;
     let currentStepIdx = 0;
+    if (renderIntervalRef.current) clearInterval(renderIntervalRef.current);
     const interval = setInterval(() => {
-      setRenderProgress((prev) => {
-        const targetPrg = steps[currentStepIdx].prg;
-        if (prev >= targetPrg) {
-          currentStepIdx++;
-        }
-        
-        if (currentStepIdx >= steps.length) {
-          clearInterval(interval);
-          setIsRendering(false);
-          
-          // Generate actual downloaded mock file profile
-          const timestampStr = new Date().toISOString().slice(0, 10);
-          const sanitizedTitle = storyboard.title.toLowerCase().replace(/[^a-z0-9]/g, "_");
-          const ext = exportFormat === "gif" ? "gif" : exportFormat === "webm" ? "webm" : "mp4";
-          const resLabel = exportResolution === "4k" ? "4K_UHD" : exportResolution === "vertical" ? "9_16_vertical" : exportResolution === "square" ? "1_1_square" : "1080p_FHD";
-          const totalDuration = storyboard.scenes.reduce((acc, s) => acc + s.duration, 0);
-          const computedSizeVal = ((totalDuration * exportFps * exportBitrate) / 8) * (exportFormat === "gif" ? 0.35 : 0.85);
-          const finalSizeStr = computedSizeVal.toFixed(1) + " MB";
+      if (progress >= steps[currentStepIdx].prg) {
+        currentStepIdx++;
+      }
 
-          setRenderedFile({
-            name: `${sanitizedTitle}_${resLabel}_${exportFps}fps_${timestampStr}.${ext}`,
-            size: finalSizeStr,
-            url: "#"
-          });
-          triggerAlert(`Cinematic Render complete! File compiled successfully as ${ext.toUpperCase()}.`);
-          return 100;
-        }
+      if (currentStepIdx >= steps.length) {
+        clearInterval(interval);
+        renderIntervalRef.current = null;
+        setIsRendering(false);
+        setRenderProgress(100);
 
-        setRenderStep(steps[currentStepIdx].text);
-        return prev + 1;
-      });
+        // Generate actual downloaded mock file profile
+        const timestampStr = new Date().toISOString().slice(0, 10);
+        const sanitizedTitle = storyboard.title.toLowerCase().replace(/[^a-z0-9]/g, "_");
+        const ext = exportFormat === "gif" ? "gif" : exportFormat === "webm" ? "webm" : "mp4";
+        const resLabel = exportResolution === "4k" ? "4K_UHD" : exportResolution === "vertical" ? "9_16_vertical" : exportResolution === "square" ? "1_1_square" : "1080p_FHD";
+        const totalDuration = storyboard.scenes.reduce((acc, s) => acc + s.duration, 0);
+        const computedSizeVal = ((totalDuration * exportFps * exportBitrate) / 8) * (exportFormat === "gif" ? 0.35 : 0.85);
+        const finalSizeStr = computedSizeVal.toFixed(1) + " MB";
+
+        setRenderedFile({
+          name: `${sanitizedTitle}_${resLabel}_${exportFps}fps_${timestampStr}.${ext}`,
+          size: finalSizeStr,
+          url: "#"
+        });
+        triggerAlert(`Cinematic Render complete! File compiled successfully as ${ext.toUpperCase()}.`);
+        return;
+      }
+
+      progress++;
+      setRenderStep(steps[currentStepIdx].text);
+      setRenderProgress(progress);
     }, 120);
+    renderIntervalRef.current = interval;
   };
 
   const triggerMockDownload = () => {

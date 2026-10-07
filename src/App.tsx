@@ -30,6 +30,7 @@ import {
   Palette
 } from "lucide-react";
 import { synth } from "./lib/synth";
+import { useVideoRender } from "./lib/useVideoRender";
 import { Storyboard, Scene, VisualPreset, MusicPreset, VisualResearchResult } from "./types";
 import RiggingMoCap from "./components/RiggingMoCap";
 import CreativeSuite from "./components/CreativeSuite";
@@ -83,11 +84,10 @@ export default function App() {
   const [textAnimationAspectRatio, setTextAnimationAspectRatio] = useState<"16:9" | "9:16">("16:9");
   const [textAnimationMotion, setTextAnimationMotion] = useState("zoom-in");
   const [textAnimationVibe, setTextAnimationVibe] = useState<VisualPreset>("cinema");
-  const [textAnimatingStatus, setTextAnimatingStatus] = useState<"idle" | "requesting" | "rendering" | "completed" | "error">("idle");
-  const [textAnimatingProgress, setTextAnimatingProgress] = useState(0);
-  const [textAnimatedVideoUrl, setTextAnimatedVideoUrl] = useState<string | null>(null);
-  const [textAnimationError, setTextAnimationError] = useState("");
-  const [textAnimatingOpName, setTextAnimatingOpName] = useState("");
+  const textRender = useVideoRender();
+  const { status: textAnimatingStatus, progress: textAnimatingProgress, url: textAnimatedVideoUrl } = textRender;
+  const [textAnimationInputError, setTextAnimationError] = useState("");
+  const textAnimationError = textAnimationInputError || textRender.error;
   
   // Generation & playback states
   const [storyboard, setStoryboard] = useState<Storyboard | null>(null);
@@ -99,10 +99,8 @@ export default function App() {
   const [customScale, setCustomScale] = useState<"major" | "minor" | "pentatonic" | "phrygian">("pentatonic");
   
   // Real Veo AI Video generation state
-  const [veoStatus, setVeoStatus] = useState<"idle" | "requesting" | "rendering" | "completed" | "error">("idle");
-  const [veoOpName, setVeoOpName] = useState<string | null>(null);
-  const [veoVideoUrl, setVeoVideoUrl] = useState<string | null>(null);
-  const [veoProgress, setVeoProgress] = useState(0);
+  const veoRender = useVideoRender();
+  const { status: veoStatus, progress: veoProgress, url: veoVideoUrl, error: veoError } = veoRender;
   const [veoPrompt, setVeoPrompt] = useState("");
 
   // Hugging Face state variables
@@ -117,11 +115,10 @@ export default function App() {
   const [uploadedImageMime, setUploadedImageMime] = useState<string | null>(null);
   const [animationPrompt, setAnimationPrompt] = useState("");
   const [animationAspectRatio, setAnimationAspectRatio] = useState<"16:9" | "9:16">("16:9");
-  const [animatingStatus, setAnimatingStatus] = useState<"idle" | "requesting" | "rendering" | "completed" | "error">("idle");
-  const [animatingProgress, setAnimatingProgress] = useState(0);
-  const [animatedVideoUrl, setAnimatedVideoUrl] = useState<string | null>(null);
-  const [animationError, setAnimationError] = useState("");
-  const [animatingOpName, setAnimatingOpName] = useState("");
+  const animateRender = useVideoRender();
+  const { status: animatingStatus, progress: animatingProgress, url: animatedVideoUrl } = animateRender;
+  const [animationInputError, setAnimationError] = useState("");
+  const animationError = animationInputError || animateRender.error;
 
   // Canvas and playback animation timeline trackers
   const [sceneElapsedTime, setSceneElapsedTime] = useState(0);
@@ -167,16 +164,20 @@ export default function App() {
     };
   }, []);
 
-  // Sync synth changes when states change
+  // Apply the tempo and scale controls live, without restarting playback
   useEffect(() => {
-    if (isPlaying && storyboard) {
-      synth.updateBpm(customBpm);
-      // Restart synth with correct style/vibe parameters
-      synth.start(storyboard.musicVibe, storyboard.scale, storyboard.tempoBpm, (step) => {
-        // Option to trigger visual pulsations on steps
-      });
-    }
-  }, [customBpm, customScale, storyboard?.musicVibe]);
+    synth.updateBpm(customBpm);
+  }, [customBpm]);
+
+  useEffect(() => {
+    synth.setScale(customScale);
+  }, [customScale]);
+
+  // The animation loop reads these through refs so it always sees the current scene
+  const storyboardRef = useRef(storyboard);
+  storyboardRef.current = storyboard;
+  const activeSceneIndexRef = useRef(activeSceneIndex);
+  activeSceneIndexRef.current = activeSceneIndex;
 
   // Handle Play / Pause sequence toggle
   const togglePlay = () => {
@@ -193,7 +194,7 @@ export default function App() {
     } else {
       setIsPlaying(true);
       startTimeRef.current = null;
-      synth.start(storyboard.musicVibe, storyboard.scale, storyboard.tempoBpm);
+      synth.start(storyboard.musicVibe, customScale, customBpm);
       synth.setMute(isAudioMuted);
       
       // Setup live visualizer sampler
@@ -293,10 +294,11 @@ export default function App() {
 
       // Animation loop
       const runTimeline = (timestamp: number) => {
+        const board = storyboardRef.current;
+        if (!board) return;
         if (!startTimeRef.current) startTimeRef.current = timestamp;
-        const safeIdx = Math.min(activeSceneIndex, storyboard.scenes.length - 1);
-        const currentScene = storyboard.scenes[safeIdx];
-        const durationMs = currentScene.duration * 1000;
+        const safeIdx = Math.min(activeSceneIndexRef.current, board.scenes.length - 1);
+        const currentScene = board.scenes[safeIdx];
         
         const elapsed = (timestamp - startTimeRef.current) / 1000;
         setSceneElapsedTime(elapsed);
@@ -307,7 +309,7 @@ export default function App() {
           setSceneElapsedTime(0);
           setActiveSceneIndex((prev) => {
             const nextIdx = prev + 1;
-            if (nextIdx >= storyboard.scenes.length) {
+            if (nextIdx >= board.scenes.length) {
               return 0; // Loop storyboard back
             }
             return nextIdx;
@@ -330,8 +332,7 @@ export default function App() {
   const triggerGenerateStoryboard = async (isFirst = false) => {
     setIsGenerating(true);
     // Reset video player in case old video exists
-    setVeoVideoUrl(null);
-    setVeoStatus("idle");
+    veoRender.reset();
 
     try {
       const response = await fetch("/api/generate-storyboard", {
@@ -464,263 +465,44 @@ export default function App() {
   };
 
   // Start real Veo AI video generation
-  const startVeoVideoRender = async () => {
+  const startVeoVideoRender = () => {
     if (!storyboard) return;
-    setVeoStatus("requesting");
-    setVeoProgress(5);
-    setVeoVideoUrl(null);
-
-    // Formulate a beautiful prompt combining overall storyboard visual layout
     const finalRenderPrompt = `${prompt}. Style: ${selectedStyle} digital cinematography, gorgeous background of ${storyboard.scenes[0].backgroundColor}, dramatic parallax layout.`;
     setVeoPrompt(finalRenderPrompt);
-
-    try {
-      const response = await fetch("/api/generate-video", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          prompt: finalRenderPrompt,
-          aspectRatio: "16:9",
-          resolution: "720p"
-        }),
-      });
-
-      if (!response.ok) {
-        const errData = await response.json();
-        throw new Error(errData.error || "Generation endpoint refused.");
-      }
-
-      const { operationName } = await response.json();
-      setVeoOpName(operationName);
-      setVeoStatus("rendering");
-      setVeoProgress(20);
-
-      // Start status check polling
-      pollVeoStatus(operationName);
-    } catch (err: any) {
-      console.error(err);
-      setVeoStatus("error");
-    }
+    veoRender.start("/api/generate-video", {
+      prompt: finalRenderPrompt,
+      aspectRatio: "16:9",
+      resolution: "720p",
+    });
   };
 
-  // Start image-to-video animation using veo-3.1-fast-generate-preview
-  const triggerAnimateImage = async () => {
+  // Image-to-video animation of the uploaded image
+  const triggerAnimateImage = () => {
     if (!uploadedImage) {
       setAnimationError("Please upload a photo first.");
       return;
     }
-    setAnimatingStatus("requesting");
-    setAnimatingProgress(5);
-    setAnimatedVideoUrl(null);
     setAnimationError("");
-
-    try {
-      const response = await fetch("/api/animate-image", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          image: uploadedImage,
-          prompt: animationPrompt,
-          aspectRatio: animationAspectRatio
-        }),
-      });
-
-      if (!response.ok) {
-        const errData = await response.json();
-        throw new Error(errData.error || "Animation endpoint refused request.");
-      }
-
-      const { operationName } = await response.json();
-      setAnimatingOpName(operationName);
-      setAnimatingStatus("rendering");
-      setAnimatingProgress(20);
-
-      // Start status check polling for the animation video
-      pollAnimatingStatus(operationName);
-    } catch (err: any) {
-      console.error(err);
-      setAnimationError(err.message || "Failed to start animation.");
-      setAnimatingStatus("error");
-    }
+    animateRender.start("/api/animate-image", {
+      image: uploadedImage,
+      prompt: animationPrompt,
+      aspectRatio: animationAspectRatio,
+    });
   };
 
-  // Poll for Image animation video generation progress
-  const pollAnimatingStatus = (operationName: string) => {
-    let checkCount = 0;
-    const interval = setInterval(async () => {
-      checkCount++;
-      // Increment pseudo progress to simulate dynamic progress bar
-      setAnimatingProgress(prev => Math.min(95, prev + Math.floor(Math.random() * 5 + 2)));
-
-      try {
-        const response = await fetch("/api/video-status", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ operationName }),
-        });
-
-        if (!response.ok) throw new Error("Status API failure");
-        const data = await response.json();
-
-        if (data.done) {
-          clearInterval(interval);
-          setAnimatingProgress(100);
-          
-          // Request streaming URL or download directly
-          const blobRes = await fetch("/api/video-download", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ operationName }),
-          });
-          const blob = await blobRes.blob();
-          const localUrl = URL.createObjectURL(blob);
-          setAnimatedVideoUrl(localUrl);
-          setAnimatingStatus("completed");
-        }
-      } catch (err) {
-        console.error("Animation polling error: ", err);
-      }
-
-      // Timeout safety (30 attempts * 4s = 120s)
-      if (checkCount > 30) {
-        clearInterval(interval);
-        setAnimationError("Polling timed out. The model might be slow under high traffic. Try again later.");
-        setAnimatingStatus("error");
-      }
-    }, 4000);
-  };
-
-  // Start Direct Text-to-Animation Conversion
-  const triggerTextToVideo = async () => {
+  // Direct text-to-video
+  const triggerTextToVideo = () => {
     if (!textAnimationPrompt.trim()) {
       setTextAnimationError("Please enter a text prompt.");
       return;
     }
-    setTextAnimatingStatus("requesting");
-    setTextAnimatingProgress(5);
-    setTextAnimatedVideoUrl(null);
     setTextAnimationError("");
-
-    try {
-      const response = await fetch("/api/text-to-video", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          prompt: textAnimationPrompt,
-          aspectRatio: textAnimationAspectRatio,
-          motionStyle: textAnimationMotion,
-          vibe: textAnimationVibe
-        }),
-      });
-
-      if (!response.ok) {
-        const errData = await response.json();
-        throw new Error(errData.error || "Text-to-Animation endpoint refused request.");
-      }
-
-      const { operationName } = await response.json();
-      setTextAnimatingOpName(operationName);
-      setTextAnimatingStatus("rendering");
-      setTextAnimatingProgress(20);
-
-      // Start polling
-      pollTextToVideoStatus(operationName);
-    } catch (err: any) {
-      console.error(err);
-      setTextAnimationError(err.message || "Failed to start text-to-animation.");
-      setTextAnimatingStatus("error");
-    }
-  };
-
-  // Poll for Text-to-Video generation progress
-  const pollTextToVideoStatus = (operationName: string) => {
-    let checkCount = 0;
-    const interval = setInterval(async () => {
-      checkCount++;
-      setTextAnimatingProgress(prev => Math.min(95, prev + Math.floor(Math.random() * 5 + 2)));
-
-      try {
-        const response = await fetch("/api/video-status", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ operationName }),
-        });
-
-        if (!response.ok) throw new Error("Status API failure");
-        const data = await response.json();
-
-        if (data.done) {
-          clearInterval(interval);
-          setTextAnimatingProgress(100);
-          
-          const blobRes = await fetch("/api/video-download", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ operationName }),
-          });
-          const blob = await blobRes.blob();
-          const localUrl = URL.createObjectURL(blob);
-          setTextAnimatedVideoUrl(localUrl);
-          setTextAnimatingStatus("completed");
-        }
-      } catch (err) {
-        console.error("Text-to-video polling error: ", err);
-      }
-
-      if (checkCount > 30) {
-        clearInterval(interval);
-        setTextAnimationError("Polling timed out. The model might be slow under high traffic. Try again later.");
-        setTextAnimatingStatus("error");
-      }
-    }, 4000);
-  };
-
-  // Poll for Veo Video generation progress
-  const pollVeoStatus = (operationName: string) => {
-    let checkCount = 0;
-    const interval = setInterval(async () => {
-      checkCount++;
-      // Increment pseudo progress to make user feel dynamic change
-      setVeoProgress(prev => Math.min(95, prev + Math.floor(Math.random() * 5 + 2)));
-
-      try {
-        const response = await fetch("/api/video-status", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ operationName }),
-        });
-
-        if (!response.ok) throw new Error("Status API failure");
-        const data = await response.json();
-
-        if (data.done) {
-          clearInterval(interval);
-          setVeoProgress(100);
-          
-          // Request streaming URL or download directly
-          setVeoVideoUrl(`/api/video-download-trigger`); // Handled by standard download link fallback below
-          setVeoStatus("completed");
-          
-          // Generate stream-safe resource from backend
-          const blobRes = await fetch("/api/video-download", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ operationName }),
-          });
-          const blob = await blobRes.blob();
-          const localUrl = URL.createObjectURL(blob);
-          setVeoVideoUrl(localUrl);
-        }
-      } catch (err) {
-        console.error("Polling error: ", err);
-      }
-
-      // Stop checking if timed out (e.g., 20 attempts ~ 100 seconds)
-      if (checkCount > 30) {
-        clearInterval(interval);
-        setVeoStatus("error");
-      }
-    }, 4000);
+    textRender.start("/api/text-to-video", {
+      prompt: textAnimationPrompt,
+      aspectRatio: textAnimationAspectRatio,
+      motionStyle: textAnimationMotion,
+      vibe: textAnimationVibe,
+    });
   };
 
   // Visual Renderer math for canvas elements: Parallax offsets
@@ -1305,12 +1087,12 @@ export default function App() {
 
               {veoStatus === "error" && (
                 <div className="bg-rose-950/20 border border-rose-500/30 p-3 rounded-sm">
-                  <p className="text-[10px] font-bold text-rose-400">VE0 PIPELINE UNCONFIGURED</p>
+                  <p className="text-[10px] font-bold text-rose-400">VIDEO RENDER UNAVAILABLE</p>
                   <p className="text-[9px] opacity-60 mt-1">
-                    To trigger genuine high-definition video pipelines, please specify a premium Google GenAI Billing Key. Falling back to real-time storyboard renderer!
+                    {veoError || "The render failed."} The live storyboard preview above still works without it.
                   </p>
                   <button
-                    onClick={() => setVeoStatus("idle")}
+                    onClick={veoRender.reset}
                     className="mt-2 text-[9px] uppercase tracking-wider underline opacity-80 hover:opacity-100 block"
                   >
                     Reset Pipeline
@@ -1491,7 +1273,7 @@ export default function App() {
                             e.stopPropagation();
                             setUploadedImage(null);
                             setUploadedImageMime(null);
-                            setAnimatedVideoUrl(null);
+                            animateRender.reset();
                           }}
                           className="text-[10px] uppercase font-mono bg-red-600/80 hover:bg-red-600 text-white px-2.5 py-1 font-bold rounded-xs cursor-pointer"
                         >
@@ -1615,12 +1397,9 @@ export default function App() {
                   {animationError && (
                     <div className="bg-rose-950/20 border border-rose-500/30 p-3 rounded-xs text-[10px] leading-relaxed text-rose-200">
                       <p className="font-bold uppercase tracking-wider text-[11px] text-rose-400 mb-1">
-                        Veo Pipeline Unconfigured
+                        Render failed
                       </p>
                       {animationError}
-                      <p className="mt-1.5 opacity-60 font-mono">
-                        Ensure you have a validated Gemini API key under Settings &gt; Secrets.
-                      </p>
                     </div>
                   )}
                 </div>
@@ -1805,12 +1584,9 @@ export default function App() {
                   {textAnimationError && (
                     <div className="bg-rose-950/20 border border-rose-500/30 p-3 rounded-xs text-[10px] leading-relaxed text-rose-200">
                       <p className="font-bold uppercase tracking-wider text-[11px] text-rose-400 mb-1">
-                        Veo Pipeline Unconfigured
+                        Render failed
                       </p>
                       {textAnimationError}
-                      <p className="mt-1.5 opacity-60 font-mono">
-                        Ensure you have a validated Gemini API key under Settings &gt; Secrets.
-                      </p>
                     </div>
                   )}
                 </div>

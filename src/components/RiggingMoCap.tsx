@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
+import { useVideoRender } from "../lib/useVideoRender";
 import {
   Bone,
   Play,
@@ -136,11 +137,10 @@ export default function RiggingMoCap() {
   const [currentFrameIndex, setCurrentFrameIndex] = useState(0);
   
   // Veo Render states
-  const [renderStatus, setRenderStatus] = useState<"idle" | "rendering" | "completed" | "error">("idle");
-  const [renderProgress, setRenderProgress] = useState(0);
-  const [renderedVideoUrl, setRenderedVideoUrl] = useState<string | null>(null);
-  const [renderedOpName, setRenderedOpName] = useState("");
-  const [renderError, setRenderError] = useState("");
+  const veoRender = useVideoRender();
+  // "requesting" is shown the same way as "rendering" in this panel
+  const renderStatus = veoRender.status === "requesting" ? "rendering" : veoRender.status;
+  const { progress: renderProgress, url: renderedVideoUrl, error: renderError } = veoRender;
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -732,83 +732,18 @@ export default function RiggingMoCap() {
   };
 
   // TRIGGER VEO MOTION RENDER
-  const handleRenderVeoMotion = async () => {
-    setRenderStatus("rendering");
-    setRenderProgress(10);
-    setRenderedVideoUrl(null);
-    setRenderError("");
-
+  const handleRenderVeoMotion = () => {
     // Create a descriptive motion script from current joint proportions or active motion
     const customPrompt = `A stylized character (${selectedChar.name}) performing high-fidelity physical motion capture dynamics: ${
       activeMotion ? MOTION_PRESETS.find(m => m.id === activeMotion)?.description : "a custom articulated structural stance with cybernetic joints."
     } Rendered in stunning atmospheric cinematic visual style, volumetric lighting, unreal engine 5, 8k. Preset theme: ${selectedChar.visualStyle}.`;
 
-    try {
-      const response = await fetch("/api/text-to-video", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          prompt: customPrompt,
-          aspectRatio: "16:9",
-          motionStyle: activeMotion || "orbit-rotation",
-          vibe: selectedChar.visualStyle
-        }),
-      });
-
-      if (!response.ok) {
-        throw new Error("Skeletal MoCap Render Refused by Backend");
-      }
-
-      const data = await response.json();
-      setRenderedOpName(data.operationName);
-      setRenderProgress(30);
-
-      // Start status polling
-      let checkCount = 0;
-      const interval = setInterval(async () => {
-        checkCount++;
-        setRenderProgress(prev => Math.min(95, prev + Math.floor(Math.random() * 5 + 3)));
-
-        try {
-          const statusRes = await fetch("/api/video-status", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ operationName: data.operationName }),
-          });
-
-          if (!statusRes.ok) throw new Error("Status failed");
-          const statusData = await statusRes.json();
-
-          if (statusData.done) {
-            clearInterval(interval);
-            setRenderProgress(100);
-
-            const downloadRes = await fetch("/api/video-download", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ operationName: data.operationName }),
-            });
-            const blob = await downloadRes.blob();
-            const localUrl = URL.createObjectURL(blob);
-            setRenderedVideoUrl(localUrl);
-            setRenderStatus("completed");
-          }
-        } catch (err) {
-          console.error("Video status polling error: ", err);
-        }
-
-        if (checkCount > 30) {
-          clearInterval(interval);
-          setRenderError("Rendering took too long. Check your internet connection or try again.");
-          setRenderStatus("error");
-        }
-      }, 4000);
-
-    } catch (err: any) {
-      console.error(err);
-      setRenderError(err.message || "Failed to initiate Veo Motion Synthesis pipeline.");
-      setRenderStatus("error");
-    }
+    veoRender.start("/api/text-to-video", {
+      prompt: customPrompt,
+      aspectRatio: "16:9",
+      motionStyle: activeMotion || "orbit-rotation",
+      vibe: selectedChar.visualStyle,
+    });
   };
 
   return (

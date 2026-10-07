@@ -3,15 +3,57 @@ import path from "path";
 import dotenv from "dotenv";
 import { GoogleGenAI, Type, GenerateVideosOperation } from "@google/genai";
 import { createServer as createViteServer } from "vite";
+import { Readable } from "stream";
+import type { Request, Response, NextFunction } from "express";
 
 dotenv.config();
 
 const app = express();
 const PORT = 3000;
 
-// Set up body parsers with limits for handling base64 images
-app.use(express.json({ limit: "25mb" }));
-app.use(express.urlencoded({ extended: true, limit: "25mb" }));
+// Behind Cloud Run / a reverse proxy, req.ip should be the client address
+app.set("trust proxy", 1);
+
+// Only the image-to-video endpoint needs a large body (base64 image upload)
+app.use("/api/animate-image", express.json({ limit: "25mb" }));
+app.use(express.json({ limit: "1mb" }));
+
+// Simple in-memory per-IP rate limiter. Every AI endpoint spends the server's
+// API keys, so cap how often a single client can call them.
+function rateLimit(max: number, windowMs: number) {
+  const hits = new Map<string, { count: number; resetAt: number }>();
+  return (req: Request, res: Response, next: NextFunction) => {
+    const now = Date.now();
+    if (hits.size > 10_000) {
+      for (const [key, entry] of hits) if (entry.resetAt <= now) hits.delete(key);
+    }
+    const key = req.ip || "unknown";
+    const entry = hits.get(key);
+    if (!entry || entry.resetAt <= now) {
+      hits.set(key, { count: 1, resetAt: now + windowMs });
+      return next();
+    }
+    if (entry.count >= max) {
+      res.setHeader("Retry-After", Math.ceil((entry.resetAt - now) / 1000).toString());
+      return res.status(429).json({ error: "Too many requests. Please wait a bit and try again." });
+    }
+    entry.count++;
+    next();
+  };
+}
+
+const aiLimiter = rateLimit(Number(process.env.AI_RATE_LIMIT) || 30, 10 * 60 * 1000);
+const videoLimiter = rateLimit(Number(process.env.VIDEO_RATE_LIMIT) || 5, 60 * 60 * 1000);
+
+const HF_MODELS = new Set([
+  "black-forest-labs/FLUX.1-schnell",
+  "stabilityai/stable-diffusion-3.5-large",
+  "stabilityai/stable-diffusion-xl-base-1.0",
+  "prompthero/openjourney",
+]);
+
+const VIDEO_UNAVAILABLE_MESSAGE =
+  "Video generation needs a GEMINI_API_KEY with Veo access. Set it in .env.local (or AI Studio secrets) to render real videos.";
 
 // Initialize Google GenAI
 const apiKey = process.env.GEMINI_API_KEY || "";
@@ -34,6 +76,31 @@ function checkQuotaExhaustion(): boolean {
   }
   isQuotaExhausted = false;
   return false;
+}
+
+function errorText(err: any): string {
+  return String(err?.message ?? err ?? "");
+}
+
+// 429 / RESOURCE_EXHAUSTED: the key is out of quota, back off globally.
+function isQuotaError(err: any): boolean {
+  const msg = errorText(err);
+  return err?.status === 429 || msg.includes("RESOURCE_EXHAUSTED") || /\b429\b/.test(msg);
+}
+
+// 503 / UNAVAILABLE: the model is temporarily overloaded, try another model.
+function isOverloadedError(err: any): boolean {
+  const msg = errorText(err);
+  return err?.status === 503 || msg.includes("UNAVAILABLE") || /\b503\b/.test(msg);
+}
+
+function cleanErrorMessage(err: any): string {
+  const msg = errorText(err) || "Unknown error";
+  return msg.startsWith("{") ? "API response error" : msg;
+}
+
+function hasGeminiKey(): boolean {
+  return Boolean(apiKey) && apiKey !== "MY_GEMINI_API_KEY";
 }
 
 function setQuotaExhausted() {
@@ -84,13 +151,14 @@ async function generateWithRetryAndFallback(options: {
         console.log(`[${label}] Failed with model "${modelName}" (Attempt ${attempt}/2):`, cleanMsg);
         
         // If it fails due to high demand (503) or rate limit (429), skip other retries on this busy model and try the next fallback model!
-        const isQuotaOrDemand = err.status === 429 || err.status === 503 || (err.message && (err.message.includes("503") || err.message.includes("429") || err.message.includes("limit") || err.message.includes("demand") || err.message.includes("quota") || err.message.includes("RESOURCE_EXHAUSTED") || err.message.includes("UNAVAILABLE")));
-        if (isQuotaOrDemand) {
+        if (isQuotaError(err)) {
+          // Quota is per key, so other models won't help either.
           setQuotaExhausted();
-          if (attempt === 1) {
-            console.log(`[${label}] Detected high demand/quota error on "${modelName}". Skipping further retries for this model and moving to fallback model.`);
-            break;
-          }
+          throw err;
+        }
+        if (isOverloadedError(err)) {
+          console.log(`[${label}] "${modelName}" is overloaded. Moving to fallback model.`);
+          break;
         }
       }
     }
@@ -100,7 +168,7 @@ async function generateWithRetryAndFallback(options: {
 }
 
 // 1. STORYBOARD GENERATION ENDPOINT (Cooperative Multi-Model Production Crew)
-app.post("/api/generate-storyboard", async (req, res) => {
+app.post("/api/generate-storyboard", aiLimiter, async (req, res) => {
   try {
     const { prompt, style, musicVibe, aspect, skipAI } = req.body;
 
@@ -108,10 +176,13 @@ app.post("/api/generate-storyboard", async (req, res) => {
       return res.status(400).json({ error: "Prompt is required" });
     }
 
-    if (skipAI || !apiKey || apiKey === "MY_GEMINI_API_KEY") {
-      // Return a beautiful mocked template if skipAI is requested or no API key is set
-      console.warn("Using fallback storyboard due to skipAI flag or missing API Key");
-      return res.json(getFallbackStoryboard(prompt, style, musicVibe));
+    if (skipAI || !hasGeminiKey()) {
+      // Built-in template storyboard for the first load, or when no API key is set
+      const fallback = getFallbackStoryboard(prompt, style, musicVibe);
+      if (!skipAI) {
+        fallback.warning = "No GEMINI_API_KEY is configured, so this is a built-in template storyboard rather than an AI-generated one.";
+      }
+      return res.json(fallback);
     }
 
     console.log("Multi-Model Pipeline - Calling Lead Director Model...");
@@ -323,7 +394,7 @@ Style Requested: ${style || "cinema"}`;
     try {
       const { prompt, style, musicVibe } = req.body;
       const fallback = getFallbackStoryboard(prompt || "Cosmic Journey", style || "cinema", musicVibe || "ambient");
-      fallback.warning = `The AI model pipeline is experiencing high demand (${cleanErrorMsg}). A high-fidelity customized procedural storyboard was generated to ensure uninterrupted creativity.`;
+      fallback.warning = `AI generation failed (${cleanErrorMsg}), so this is a built-in template storyboard. Try again in a few minutes.`;
       res.json(fallback);
     } catch (fallbackErr: any) {
       console.log("Critical: Local procedural fallback also failed: ", fallbackErr.message || fallbackErr);
@@ -333,7 +404,7 @@ Style Requested: ${style || "cinema"}`;
 });
 
 // 2. SCENE IMAGE GENERATION ENDPOINT (For visual backdrops inside scenes if desired)
-app.post("/api/generate-image", async (req, res) => {
+app.post("/api/generate-image", aiLimiter, async (req, res) => {
   try {
     const { prompt, aspectRatio } = req.body;
 
@@ -341,7 +412,7 @@ app.post("/api/generate-image", async (req, res) => {
       return res.status(400).json({ error: "Prompt is required" });
     }
 
-    if (!apiKey || apiKey === "MY_GEMINI_API_KEY") {
+    if (!hasGeminiKey()) {
       return res.status(401).json({ error: "Gemini API key is missing or unconfigured." });
     }
 
@@ -350,7 +421,7 @@ app.post("/api/generate-image", async (req, res) => {
       return res.json({ 
         imageUrl: "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=1200&q=80",
         isFallback: true,
-        message: "Image skipped to respect active cached rate/quota limit. Procured stylized scenic backdrop."
+        message: "The Gemini quota is used up, so a placeholder image was used."
       });
     }
 
@@ -389,20 +460,20 @@ app.post("/api/generate-image", async (req, res) => {
     const errMsg = err.message || err;
     const cleanMsg = typeof errMsg === "string" && errMsg.startsWith("{") ? "API response error" : errMsg;
     console.log("Image generation failed, using scenic fallback. Reason:", cleanMsg);
-    const isQuotaOrDemand = err.status === 429 || err.status === 503 || (err.message && (err.message.includes("503") || err.message.includes("429") || err.message.includes("limit") || err.message.includes("demand") || err.message.includes("quota") || err.message.includes("RESOURCE_EXHAUSTED") || err.message.includes("UNAVAILABLE")));
+    const isQuotaOrDemand = isQuotaError(err);
     if (isQuotaOrDemand) {
       setQuotaExhausted();
     }
     res.json({ 
       imageUrl: "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=1200&q=80",
       isFallback: true,
-      message: `Image model under high demand (${cleanMsg}). Procured stylized scenic backdrop.`
+      message: `Image generation failed (${cleanMsg}), so a placeholder image was used.`
     });
   }
 });
 
 // 2.5 HUGGING FACE INFERENCE API ENDPOINT
-app.post("/api/generate-hf", async (req, res) => {
+app.post("/api/generate-hf", aiLimiter, async (req, res) => {
   try {
     const { prompt, modelId } = req.body;
     const hfToken = process.env.HF_TOKEN;
@@ -412,6 +483,9 @@ app.post("/api/generate-hf", async (req, res) => {
     }
 
     const activeModel = modelId || "black-forest-labs/FLUX.1-schnell";
+    if (!HF_MODELS.has(activeModel)) {
+      return res.status(400).json({ error: "Unsupported model" });
+    }
 
     if (!hfToken || hfToken === "MY_HF_TOKEN" || hfToken === "") {
       console.warn("Using fallback placeholder image due to missing Hugging Face Token");
@@ -423,7 +497,7 @@ app.post("/api/generate-hf", async (req, res) => {
     }
 
     console.log(`[Hugging Face] Querying Inference API for model: ${activeModel}`);
-    const hfResponse = await fetch(`https://api-inference.huggingface.co/models/${activeModel}`, {
+    const hfResponse = await fetch(`https://router.huggingface.co/hf-inference/models/${activeModel}`, {
       method: "POST",
       headers: {
         "Authorization": `Bearer ${hfToken}`,
@@ -438,7 +512,7 @@ app.post("/api/generate-hf", async (req, res) => {
       return res.json({ 
         imageUrl: "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=1200&q=80",
         isFallback: true,
-        message: "Hugging Face model is currently preparing. Standard backdrop loaded."
+        message: `Hugging Face returned HTTP ${hfResponse.status}, so a placeholder image was used.`
       });
     }
 
@@ -448,17 +522,17 @@ app.post("/api/generate-hf", async (req, res) => {
 
     res.json({ imageUrl: `data:${mimeType};base64,${base64}` });
   } catch (err: any) {
-    console.log("[Hugging Face] Query completed with static procedural backup.");
+    console.log("[Hugging Face] Request failed, serving placeholder:", cleanErrorMessage(err));
     res.json({ 
       imageUrl: "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=1200&q=80",
       isFallback: true,
-      message: "Hugging Face backdrop pipeline is currently resting. Polished visual placeholder retrieved."
+      message: "The Hugging Face request failed, so a placeholder image was used."
     });
   }
 });
 
 // 2.7 INTERNET VISUAL RESEARCH GROUNDING ENDPOINT (AI Visual Surf/Research Agent)
-app.post("/api/research-visuals", async (req, res) => {
+app.post("/api/research-visuals", aiLimiter, async (req, res) => {
   try {
     const { query, skipAI } = req.body;
 
@@ -466,14 +540,16 @@ app.post("/api/research-visuals", async (req, res) => {
       return res.status(400).json({ error: "Query is required" });
     }
 
-    if (skipAI || !apiKey || apiKey === "MY_GEMINI_API_KEY") {
-      console.warn("[Research] Using local visual research fallback due to skipAI flag or missing API key.");
-      return res.json(getFallbackVisualResearch(query));
+    if (skipAI || !hasGeminiKey()) {
+      const fallback = getFallbackVisualResearch(query);
+      if (!skipAI) fallback.warning = "No GEMINI_API_KEY is configured, so these are built-in example results.";
+      return res.json(fallback);
     }
 
     if (checkQuotaExhaustion()) {
-      console.warn("[Research] Skipping API call due to cached quota limits. Serving local fallback.");
-      return res.json(getFallbackVisualResearch(query));
+      const fallback = getFallbackVisualResearch(query);
+      fallback.warning = "The Gemini quota is used up, so these are built-in example results.";
+      return res.json(fallback);
     }
 
     console.log(`[Research] Running visual trend research on the web for query: "${query}"`);
@@ -518,11 +594,11 @@ Only output raw JSON. Do not write any text outside of the JSON object.`;
     });
 
     const text = response.text;
-    console.log("[Research] Grounded content response: ", text);
+    console.log(`[Research] Grounded response received (${text?.length ?? 0} chars)`);
     const parsed = JSON.parse(text || "{}");
     res.json(parsed);
   } catch (err: any) {
-    const isQuotaOrDemand = err.status === 429 || err.status === 503 || (err.message && (err.message.includes("503") || err.message.includes("429") || err.message.includes("limit") || err.message.includes("demand") || err.message.includes("quota") || err.message.includes("RESOURCE_EXHAUSTED") || err.message.includes("UNAVAILABLE")));
+    const isQuotaOrDemand = isQuotaError(err);
     if (isQuotaOrDemand) {
       console.log("[Research] Quota limit or rate limit exceeded. Activating local visual research fallback.");
       setQuotaExhausted();
@@ -532,13 +608,13 @@ Only output raw JSON. Do not write any text outside of the JSON object.`;
       console.log("[Research] API call failed. Utilizing fallback. Detail:", cleanMsg);
     }
     const fallback = getFallbackVisualResearch(req.body.query || "");
-    fallback.warning = `The live visual research agent is taking a breather. Procured deep procedural search profile.`;
+    fallback.warning = "Live web research failed, so these are built-in example results rather than fresh research.";
     res.json(fallback);
   }
 });
 
 // 2.8 CREATIVE ARTISTIC SUGGESTIONS ENDPOINT (For Storyboarding Assistance, Camera Angles & Transitions)
-app.post("/api/artistic-suggestions", async (req, res) => {
+app.post("/api/artistic-suggestions", aiLimiter, async (req, res) => {
   try {
     const { prompt, currentScene, style, skipAI } = req.body;
 
@@ -546,9 +622,10 @@ app.post("/api/artistic-suggestions", async (req, res) => {
       return res.status(400).json({ error: "Prompt or sequence theme is required" });
     }
 
-    if (skipAI || !apiKey || apiKey === "MY_GEMINI_API_KEY" || checkQuotaExhaustion()) {
-      console.warn("[Artistic] Using procedural artistic suggestions fallback.");
-      return res.json(getFallbackArtisticSuggestions(prompt, style || "cinema"));
+    if (skipAI || !hasGeminiKey() || checkQuotaExhaustion()) {
+      const fallback = getFallbackArtisticSuggestions(prompt, style || "cinema");
+      if (!skipAI) fallback.warning = "AI suggestions aren't available right now (no API key or quota used up), so these are built-in examples.";
+      return res.json(fallback);
     }
 
     console.log(`[Artistic] Running creative suggestions for: "${prompt}" in style "${style}"`);
@@ -607,7 +684,7 @@ Style Preset: "${style || "cinema"}"`;
     const parsed = JSON.parse(response.text || "{}");
     res.json(parsed);
   } catch (err: any) {
-    const isQuotaOrDemand = err.status === 429 || err.status === 503 || (err.message && (err.message.includes("503") || err.message.includes("429") || err.message.includes("limit") || err.message.includes("demand") || err.message.includes("quota") || err.message.includes("RESOURCE_EXHAUSTED") || err.message.includes("UNAVAILABLE")));
+    const isQuotaOrDemand = isQuotaError(err);
     if (isQuotaOrDemand) {
       console.log("[Artistic] Gemini call rate limit exceeded. Utilizing procedural suggestions fallback.");
       setQuotaExhausted();
@@ -617,26 +694,44 @@ Style Preset: "${style || "cinema"}"`;
       console.log("[Artistic] Gemini call failed. Utilizing fallback. Detail:", cleanMsg);
     }
     const fallback = getFallbackArtisticSuggestions(req.body.prompt || "", req.body.style || "cinema");
-    fallback.warning = `The AI artistic suggestions helper is resting. Retrieved high-fidelity procedural layout guides.`;
+    fallback.warning = "AI suggestions failed, so these are built-in example suggestions.";
     res.json(fallback);
   }
 });
 
-// 3. VEO VIDEO GENERATION ENDPOINT (For authentic full AI video rendering)
-app.post("/api/generate-video", async (req, res) => {
+// 3. VEO VIDEO ENDPOINTS
+// Without a key we answer { unavailable: true } so the UI can say so plainly,
+// instead of pretending a render happened.
+function sendVideoStartError(res: Response, label: string, err: any) {
+  const message = cleanErrorMessage(err);
+  console.warn(`[${label}] Veo request failed:`, message);
+  if (isQuotaError(err)) {
+    setQuotaExhausted();
+    return res.status(429).json({ error: "The Veo quota for this API key is used up. Try again later." });
+  }
+  res.status(502).json({ error: `Veo could not start the render: ${message}` });
+}
+
+function videoPreflight(res: Response): boolean {
+  if (!hasGeminiKey()) {
+    res.json({ unavailable: true, message: VIDEO_UNAVAILABLE_MESSAGE });
+    return false;
+  }
+  if (checkQuotaExhaustion()) {
+    res.status(429).json({ error: "The Veo quota for this API key is used up. Try again in a few minutes." });
+    return false;
+  }
+  return true;
+}
+
+app.post("/api/generate-video", videoLimiter, async (req, res) => {
+  const { prompt, aspectRatio, resolution } = req.body;
+  if (!prompt) {
+    return res.status(400).json({ error: "Prompt is required" });
+  }
+  if (!videoPreflight(res)) return;
+
   try {
-    const { prompt, aspectRatio, resolution } = req.body;
-
-    if (!prompt) {
-      return res.status(400).json({ error: "Prompt is required" });
-    }
-
-    if (!apiKey || apiKey === "MY_GEMINI_API_KEY" || checkQuotaExhaustion()) {
-      console.warn("[Veo fallback] API key is missing or quota exhausted. Serving mock video operation.");
-      return res.json({ operationName: "mock_cinema_" + Date.now() });
-    }
-
-    // Call standard Veo model
     const operation = await ai.models.generateVideos({
       model: "veo-3.1-lite-generate-preview",
       prompt: prompt,
@@ -646,58 +741,32 @@ app.post("/api/generate-video", async (req, res) => {
         aspectRatio: aspectRatio || "16:9",
       },
     });
-
     res.json({ operationName: operation.name });
   } catch (err: any) {
-    console.warn("Veo Video generation start failed: ", err.message || err);
-    
-    const isQuotaOrDemand = err.status === 429 || err.status === 503 || (err.message && (err.message.includes("503") || err.message.includes("429") || err.message.includes("limit") || err.message.includes("demand") || err.message.includes("quota") || err.message.includes("RESOURCE_EXHAUSTED") || err.message.includes("UNAVAILABLE")));
-    if (isQuotaOrDemand) {
-      setQuotaExhausted();
-    }
-
-    // Serve fallback
-    res.json({ operationName: "mock_cinema_" + Date.now() });
+    sendVideoStartError(res, "Veo", err);
   }
 });
 
-// 3.5 VEO IMAGE TO VIDEO GENERATION ENDPOINT (Animate images into video)
-app.post("/api/animate-image", async (req, res) => {
+// Image-to-video (animate an uploaded image)
+app.post("/api/animate-image", videoLimiter, async (req, res) => {
+  const { image, prompt, aspectRatio } = req.body;
+  if (!image || typeof image !== "string") {
+    return res.status(400).json({ error: "Image is required" });
+  }
+  if (!videoPreflight(res)) return;
+
+  let base64Data = image;
+  let mimeType = "image/png";
+  if (image.startsWith("data:")) {
+    const parts = image.split(",");
+    base64Data = parts[1];
+    const mimeMatch = parts[0].match(/data:(.*?);/);
+    if (mimeMatch) {
+      mimeType = mimeMatch[1];
+    }
+  }
+
   try {
-    const { image, prompt, aspectRatio } = req.body;
-
-    if (!image) {
-      return res.status(400).json({ error: "Image is required" });
-    }
-
-    if (!apiKey || apiKey === "MY_GEMINI_API_KEY" || checkQuotaExhaustion()) {
-      console.warn("[Veo fallback] API key is missing or quota exhausted. Serving mock animation operation.");
-      const normPrompt = (prompt || "").toLowerCase();
-      let mockType = "cinema";
-      if (normPrompt.includes("cyberpunk") || normPrompt.includes("neon")) {
-        mockType = "cyberpunk";
-      } else if (normPrompt.includes("space") || normPrompt.includes("cosmic") || normPrompt.includes("astronaut")) {
-        mockType = "space";
-      } else if (normPrompt.includes("watercolor") || normPrompt.includes("art") || normPrompt.includes("paint") || normPrompt.includes("anime")) {
-        mockType = "watercolor";
-      }
-      return res.json({ operationName: `mock_${mockType}_${Date.now()}` });
-    }
-
-    let base64Data = image;
-    let mimeType = "image/png";
-
-    if (image.startsWith("data:")) {
-      const parts = image.split(",");
-      base64Data = parts[1];
-      const mimeMatch = parts[0].match(/data:(.*?);/);
-      if (mimeMatch) {
-        mimeType = mimeMatch[1];
-      }
-    }
-
-    console.log(`Starting image-to-video animation using veo-3.1-fast-generate-preview, aspect ratio: ${aspectRatio || "16:9"}`);
-    
     const operation = await ai.models.generateVideos({
       model: "veo-3.1-fast-generate-preview",
       prompt: prompt || "Animate this image into a beautiful dynamic video, with natural motion and cinematic lighting.",
@@ -711,56 +780,21 @@ app.post("/api/animate-image", async (req, res) => {
         aspectRatio: aspectRatio || "16:9",
       },
     });
-
     res.json({ operationName: operation.name });
   } catch (err: any) {
-    console.warn("Veo Image-to-Video generation failed: ", err.message || err);
-    
-    const isQuotaOrDemand = err.status === 429 || err.status === 503 || (err.message && (err.message.includes("503") || err.message.includes("429") || err.message.includes("limit") || err.message.includes("demand") || err.message.includes("quota") || err.message.includes("RESOURCE_EXHAUSTED") || err.message.includes("UNAVAILABLE")));
-    if (isQuotaOrDemand) {
-      setQuotaExhausted();
-    }
-
-    // Serve fallback
-    const normPrompt = (req.body.prompt || "").toLowerCase();
-    let mockType = "cinema";
-    if (normPrompt.includes("cyberpunk") || normPrompt.includes("neon")) {
-      mockType = "cyberpunk";
-    } else if (normPrompt.includes("space") || normPrompt.includes("cosmic")) {
-      mockType = "space";
-    } else if (normPrompt.includes("watercolor") || normPrompt.includes("anime")) {
-      mockType = "watercolor";
-    }
-    res.json({ operationName: `mock_${mockType}_${Date.now()}` });
+    sendVideoStartError(res, "Veo Image-to-Video", err);
   }
 });
 
-// 3.8 VEO TEXT-TO-VIDEO GENERATION ENDPOINT (Direct Text-to-Animation Conversion)
-app.post("/api/text-to-video", async (req, res) => {
+// Text-to-video
+app.post("/api/text-to-video", videoLimiter, async (req, res) => {
+  const { prompt, aspectRatio, motionStyle, vibe } = req.body;
+  if (!prompt) {
+    return res.status(400).json({ error: "Prompt is required" });
+  }
+  if (!videoPreflight(res)) return;
+
   try {
-    const { prompt, aspectRatio, motionStyle, vibe } = req.body;
-
-    if (!prompt) {
-      return res.status(400).json({ error: "Prompt is required" });
-    }
-
-    if (!apiKey || apiKey === "MY_GEMINI_API_KEY" || checkQuotaExhaustion()) {
-      console.warn("[Veo Text-to-Video fallback] Serving mock text-to-video operation.");
-      const combinedPrompt = `${prompt} Style: ${vibe || "cinema"} Motion: ${motionStyle || "zoom-in"}`;
-      const normPrompt = combinedPrompt.toLowerCase();
-      let mockType = vibe || "cinema";
-      if (normPrompt.includes("cyberpunk") || normPrompt.includes("neon")) {
-        mockType = "cyberpunk";
-      } else if (normPrompt.includes("space") || normPrompt.includes("cosmic") || normPrompt.includes("astronaut")) {
-        mockType = "space";
-      } else if (normPrompt.includes("watercolor") || normPrompt.includes("art") || normPrompt.includes("paint") || normPrompt.includes("anime")) {
-        mockType = "watercolor";
-      }
-      return res.json({ operationName: `mock_${mockType}_${Date.now()}` });
-    }
-
-    console.log(`Starting text-to-video generation using veo-3.1-fast-generate-preview, aspect ratio: ${aspectRatio || "16:9"}`);
-    
     const operation = await ai.models.generateVideos({
       model: "veo-3.1-fast-generate-preview",
       prompt: `${prompt}. Style preset: ${vibe || "cinema"}. Camera movement: ${motionStyle || "cinematic dynamic flow"}.`,
@@ -770,106 +804,69 @@ app.post("/api/text-to-video", async (req, res) => {
         aspectRatio: aspectRatio || "16:9",
       },
     });
-
     res.json({ operationName: operation.name });
   } catch (err: any) {
-    console.warn("Veo Text-to-Video generation failed: ", err.message || err);
-    
-    const isQuotaOrDemand = err.status === 429 || err.status === 503 || (err.message && (err.message.includes("503") || err.message.includes("429") || err.message.includes("limit") || err.message.includes("demand") || err.message.includes("quota") || err.message.includes("RESOURCE_EXHAUSTED") || err.message.includes("UNAVAILABLE")));
-    if (isQuotaOrDemand) {
-      setQuotaExhausted();
-    }
-
-    // Serve fallback
-    const normPrompt = (req.body.prompt || "").toLowerCase();
-    let mockType = "cinema";
-    if (normPrompt.includes("cyberpunk") || normPrompt.includes("neon")) {
-      mockType = "cyberpunk";
-    } else if (normPrompt.includes("space") || normPrompt.includes("cosmic")) {
-      mockType = "space";
-    } else if (normPrompt.includes("watercolor") || normPrompt.includes("anime")) {
-      mockType = "watercolor";
-    }
-    res.json({ operationName: `mock_${mockType}_${Date.now()}` });
+    sendVideoStartError(res, "Veo Text-to-Video", err);
   }
 });
 
+function readOperationName(req: Request, res: Response): string | null {
+  const { operationName } = req.body;
+  if (typeof operationName !== "string" || !/^[\w\-/.]+$/.test(operationName)) {
+    res.status(400).json({ error: "A valid operation name is required" });
+    return null;
+  }
+  return operationName;
+}
+
 // 4. VEO VIDEO STATUS ENDPOINT
 app.post("/api/video-status", async (req, res) => {
+  const operationName = readOperationName(req, res);
+  if (!operationName) return;
+
   try {
-    const { operationName } = req.body;
-
-    if (!operationName) {
-      return res.status(400).json({ error: "Operation name is required" });
-    }
-
-    if (operationName.startsWith("mock_")) {
-      return res.json({ done: true });
-    }
-
     const op = new GenerateVideosOperation();
     op.name = operationName;
-
     const updated = await ai.operations.getVideosOperation({ operation: op });
-    res.json({ done: updated.done, response: updated.response });
+    const failure = updated.error ? cleanErrorMessage(updated.error) : undefined;
+    res.json({ done: Boolean(updated.done), error: failure });
   } catch (err: any) {
-    console.warn("Veo Video status check failed: ", err.message || err);
-    res.status(500).json({ error: err.message || "Failed to check status" });
+    console.warn("Veo Video status check failed: ", cleanErrorMessage(err));
+    res.status(502).json({ error: cleanErrorMessage(err) });
   }
 });
 
 // 5. VEO VIDEO DOWNLOAD STREAM ENDPOINT
 app.post("/api/video-download", async (req, res) => {
+  const operationName = readOperationName(req, res);
+  if (!operationName) return;
+
   try {
-    const { operationName } = req.body;
-
-    if (!operationName) {
-      return res.status(400).json({ error: "Operation name is required" });
-    }
-
-    if (operationName.startsWith("mock_")) {
-      let videoUrl = "https://player.vimeo.com/external/435674703.sd.mp4?s=6f41de3531fb7e868f706f9ef02be9ba45ff600a&profile_id=139&oauth2_token_id=57447761"; // default golden cinematic
-      if (operationName.includes("cyberpunk")) {
-        videoUrl = "https://player.vimeo.com/external/371433846.sd.mp4?s=236da2f3c0227e313d3cfd9944551c0d4a040b30&profile_id=139&oauth2_token_id=57447761";
-      } else if (operationName.includes("space") || operationName.includes("cosmic")) {
-        videoUrl = "https://player.vimeo.com/external/517617498.sd.mp4?s=d0db5f55fa7300fa447e090f70db2bca9354bc78&profile_id=139&oauth2_token_id=57447761";
-      } else if (operationName.includes("watercolor") || operationName.includes("anime") || operationName.includes("art")) {
-        videoUrl = "https://player.vimeo.com/external/538571059.sd.mp4?s=df98c39e240b9df4b4f3b259972b22b10f274a44&profile_id=139&oauth2_token_id=57447761";
-      }
-      return res.redirect(videoUrl);
-    }
-
     const op = new GenerateVideosOperation();
     op.name = operationName;
-
     const updated = await ai.operations.getVideosOperation({ operation: op });
     const uri = updated.response?.generatedVideos?.[0]?.video?.uri;
 
     if (!uri) {
-      return res.status(404).json({ error: "Video URI not found or video not finished yet." });
+      return res.status(404).json({ error: "The video isn't ready, or Veo returned no video (it may have been filtered)." });
     }
 
     const videoRes = await fetch(uri, {
       headers: { "x-goog-api-key": apiKey },
     });
-
-    res.setHeader("Content-Type", "video/mp4");
-    
-    // Node streams compatibility
-    const reader = videoRes.body?.getReader();
-    if (!reader) {
-      return res.status(500).json({ error: "Unable to stream video download." });
+    if (!videoRes.ok || !videoRes.body) {
+      return res.status(502).json({ error: `Downloading the video failed (HTTP ${videoRes.status}).` });
     }
 
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      res.write(value);
-    }
-    res.end();
+    res.setHeader("Content-Type", videoRes.headers.get("content-type") || "video/mp4");
+    Readable.fromWeb(videoRes.body as any).pipe(res);
   } catch (err: any) {
-    console.warn("Veo Video streaming download failed: ", err.message || err);
-    res.status(500).json({ error: err.message || "Failed to download video stream" });
+    console.warn("Veo Video streaming download failed: ", cleanErrorMessage(err));
+    if (!res.headersSent) {
+      res.status(500).json({ error: cleanErrorMessage(err) });
+    } else {
+      res.end();
+    }
   }
 });
 
@@ -1083,7 +1080,7 @@ function getFallbackStoryboard(prompt: string, style: string, musicVibe: string)
         visualDescription: "Structural pillars or grid horizons drift backwards as a parallax background sweeps.",
         backgroundColor: currentStyle.bg[2] || currentStyle.bg[0],
         accentColor: currentStyle.accent,
-        gradientColors: currentStyle.bg.reverse(),
+        gradientColors: [...currentStyle.bg].reverse(),
         cameraMotion: {
           type: "parallax-tilt",
           speed: "slow",
