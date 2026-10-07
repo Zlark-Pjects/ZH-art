@@ -1,6 +1,5 @@
 import type { ReactNode } from "react";
-import { Download } from "lucide-react";
-import { Button, cx, downloadUrl } from "./index";
+import { cx } from "./index";
 
 /** SMPTE-style timecode at 24 fps: HH:MM:SS:FF */
 export function timecode(seconds: number) {
@@ -61,43 +60,5 @@ export function FilmGate({
         )}
       </div>
     </figure>
-  );
-}
-
-/** Empty gate: strong type and one instruction instead of an icon in a circle. */
-export function GateEmpty({ title, line }: { title: string; line: string }) {
-  return (
-    <div className="flex h-full w-full flex-col items-start justify-end bg-[radial-gradient(120%_90%_at_20%_10%,#1b1a17_0%,#08080a_60%)] p-[8%]">
-      <p className="font-display text-[clamp(2.5rem,7vw,6.5rem)] uppercase leading-[0.88] tracking-[-0.01em] text-fg/90">
-        {title}
-      </p>
-      <p className="mt-4 max-w-md font-serif text-lg italic leading-snug text-muted sm:text-xl">{line}</p>
-    </div>
-  );
-}
-
-/** Rendering gate: the progress number is the picture until the video arrives. */
-export function GateRendering({ progress, line }: { progress: number; line: string }) {
-  return (
-    <div className="flex h-full w-full flex-col items-start justify-end bg-[radial-gradient(120%_90%_at_80%_20%,#2a1d06_0%,#08080a_65%)] p-[8%]">
-      <p className="font-display text-[clamp(4rem,14vw,11rem)] leading-[0.82] tabular-nums text-accent" aria-live="polite">
-        {Math.round(progress)}
-        <span className="text-fg/30">%</span>
-      </p>
-      <p className="mt-4 max-w-md font-serif text-lg italic leading-snug text-fg/70 sm:text-xl">{line}</p>
-    </div>
-  );
-}
-
-export function GateVideo({ url, filename, muted }: { url: string; filename: string; muted?: boolean }) {
-  return (
-    <div className="group relative h-full w-full bg-black">
-      <video src={url} autoPlay loop controls muted={muted} playsInline className="h-full w-full object-contain" />
-      <div className="absolute right-4 top-[calc(7%+12px)] opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100 sm:focus-within:opacity-100">
-        <Button size="sm" variant="primary" icon={<Download className="h-4 w-4" />} onClick={() => downloadUrl(url, filename)}>
-          Download
-        </Button>
-      </div>
-    </div>
   );
 }

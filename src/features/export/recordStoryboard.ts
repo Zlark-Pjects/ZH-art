@@ -1,6 +1,7 @@
 import { synth } from "../../lib/synth";
-import type { Scene, Storyboard } from "../../types";
-import { FRAME_H, FRAME_W, computeFrame } from "../storyboard/sceneModel";
+import type { CharacterLook, Grade, RigClip, Scene, Storyboard } from "../../types";
+import { RIG_FLOOR } from "../../project/rig";
+import { FRAME_H, FRAME_W, castFigures, computeFrame, gradeFilter } from "../storyboard/sceneModel";
 
 export interface ExportOptions {
   width: number;
@@ -11,6 +12,15 @@ export interface ExportOptions {
   bpm: number;
   scale: string;
   backdrops: Record<number, string>;
+  characters: CharacterLook[];
+  clips: RigClip[];
+  grade: Grade;
+}
+
+export interface DrawExtras {
+  characters: CharacterLook[];
+  clips: RigClip[];
+  grade: Grade;
 }
 
 export interface ExportResult {
@@ -72,9 +82,13 @@ export function drawScene(
   t: number,
   backdrop: HTMLImageElement | null,
   fadeIn: number,
+  extras: DrawExtras,
 ) {
   const { width: w, height: h } = ctx.canvas;
   const frame = computeFrame(scene, t, { bass: 0, mid: 0, treble: 0 });
+  const figures = castFigures(scene, t, extras.characters, extras.clips);
+  // Colour grade (canvas filters are supported in Chromium and Firefox)
+  ctx.filter = gradeFilter(extras.grade);
 
   // Fit the 1600x900 frame like object-fit: cover
   const s = Math.max(w / FRAME_W, h / FRAME_H);
@@ -95,7 +109,7 @@ export function drawScene(
     ctx.drawImage(backdrop, (FRAME_W - backdrop.width * bs) / 2, (FRAME_H - backdrop.height * bs) / 2, backdrop.width * bs, backdrop.height * bs);
   }
 
-  for (const layer of frame.layers) {
+  frame.layers.forEach((layer, li) => {
     ctx.save();
     ctx.translate(FRAME_W / 2 + layer.dx, FRAME_H / 2 + layer.dy);
     ctx.scale(layer.zoom, layer.zoom);
@@ -119,8 +133,30 @@ export function drawScene(
       }
       ctx.restore();
     }
+    if (li === 1) {
+      for (const f of figures) {
+        ctx.save();
+        ctx.translate(f.x, f.y);
+        ctx.scale(f.flip ? -f.scale : f.scale, f.scale);
+        ctx.translate(-200, -RIG_FLOOR);
+        ctx.lineCap = "round";
+        for (const st of f.strokes) {
+          ctx.strokeStyle = st.color;
+          ctx.lineWidth = st.width;
+          ctx.beginPath();
+          ctx.moveTo(st.x1, st.y1);
+          ctx.lineTo(st.x2, st.y2);
+          ctx.stroke();
+        }
+        for (const hp of f.head) {
+          ctx.fillStyle = hp.fill;
+          ctx.fill(new Path2D(hp.d));
+        }
+        ctx.restore();
+      }
+    }
     ctx.restore();
-  }
+  });
 
   ctx.fillStyle = frame.particleColor;
   for (const p of frame.particles) {
@@ -131,17 +167,27 @@ export function drawScene(
   }
   ctx.globalAlpha = 1;
 
+  if (extras.grade.tintAmount > 0) {
+    ctx.globalCompositeOperation = "soft-light";
+    ctx.globalAlpha = extras.grade.tintAmount / 100;
+    ctx.fillStyle = extras.grade.tint;
+    ctx.fillRect(0, 0, FRAME_W, FRAME_H);
+    ctx.globalCompositeOperation = "source-over";
+    ctx.globalAlpha = 1;
+  }
+
   // Vignette (elliptical, like the SVG radial gradient)
   ctx.save();
   ctx.translate(FRAME_W / 2, FRAME_H * 0.45);
   ctx.scale(FRAME_W, FRAME_H);
   const vig = ctx.createRadialGradient(0, 0, 0, 0, 0, 0.75);
-  vig.addColorStop(0.55, "rgba(0,0,0,0)");
-  vig.addColorStop(1, "rgba(0,0,0,0.7)");
+  vig.addColorStop(0.5, "rgba(0,0,0,0)");
+  vig.addColorStop(1, `rgba(0,0,0,${Math.min(1, (extras.grade.vignette / 100) * 1.6)})`);
   ctx.fillStyle = vig;
   ctx.fillRect(-1, -1, 2, 2);
   ctx.restore();
   ctx.restore();
+  ctx.filter = "none";
 
   // Title card, sized to the output frame
   const pad = w * 0.045;
@@ -228,7 +274,7 @@ export async function recordStoryboard(
     return i;
   };
 
-  drawScene(ctx, board.scenes[0], 0, images[0] ?? null, 0);
+  drawScene(ctx, board.scenes[0], 0, images[0] ?? null, 0, opts);
   const stream = canvas.captureStream(opts.fps);
   if (opts.withAudio) {
     const audio = synth.getRecordingStream();
@@ -263,7 +309,7 @@ export async function recordStoryboard(
       if (t >= total) return finish();
       const i = sceneAt(t);
       const local = t - starts[i];
-      drawScene(ctx, board.scenes[i], local, images[i] ?? null, Math.min(1, local / 0.4));
+      drawScene(ctx, board.scenes[i], local, images[i] ?? null, Math.min(1, local / 0.4), opts);
       onProgress(t / total);
       frame = requestAnimationFrame(loop);
     };

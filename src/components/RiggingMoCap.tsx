@@ -1,5 +1,8 @@
 import React, { useState, useEffect, useRef } from "react";
-import { useVideoRender } from "../lib/useVideoRender";
+import type { CharacterLook, MotionId, RigClip } from "../types";
+import { STANDING_POSE } from "../project/rig";
+import { newId } from "../project/storage";
+import { Button, Field, IconButton, Notice, Slider, inputClass } from "../ui";
 import {
   Bone,
   Play,
@@ -115,7 +118,17 @@ const INITIAL_JOINTS: Joint[] = [
   { id: "r_ankle", name: "R Ankle", x: 240, y: 460, parent: "r_knee", color: "#f97316" }
 ];
 
-export default function RiggingMoCap() {
+export default function RiggingMoCap({
+  characters,
+  clips,
+  onSaveClip,
+  onDeleteClip,
+}: {
+  characters: CharacterLook[];
+  clips: RigClip[];
+  onSaveClip: (clip: RigClip) => void;
+  onDeleteClip: (id: string) => void;
+}) {
   const [selectedChar, setSelectedChar] = useState(CHARACTER_PRESETS[0]);
   const [joints, setJoints] = useState<Joint[]>(JSON.parse(JSON.stringify(INITIAL_JOINTS)));
   const [activeJoint, setActiveJoint] = useState<string | null>(null);
@@ -136,12 +149,19 @@ export default function RiggingMoCap() {
   const [isPlayingTimeline, setIsPlayingTimeline] = useState(false);
   const [currentFrameIndex, setCurrentFrameIndex] = useState(0);
   
-  // Veo Render states
-  const veoRender = useVideoRender();
-  // "requesting" is shown the same way as "rendering" in this panel
-  const renderStatus = veoRender.status === "requesting" ? "rendering" : veoRender.status;
-  const { progress: renderProgress, url: renderedVideoUrl, error: renderError } = veoRender;
-
+  // Project characters appear alongside the built-in rig styles
+  const characterOptions = [
+    ...characters.map((c) => ({
+      id: c.id,
+      name: c.name,
+      desc: "From your project's characters",
+      primaryColor: c.costume,
+      accentColor: c.accent,
+      visualStyle: "cinema",
+      outlineUrl: "",
+    })),
+    ...CHARACTER_PRESETS,
+  ];
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -350,23 +370,6 @@ export default function RiggingMoCap() {
           }
 
           return { ...j, x: j.x + dx, y: j.y + dy };
-        });
-      }
-
-      // 2. Camera MoCap Live Sway Simulation
-      if (cameraActive && cameraTracking) {
-        // Overlay interactive live tracking wobble referencing simulated CV markers
-        const cvSwayX = Math.sin(t * 0.8) * 6;
-        const cvSwayY = Math.cos(t * 1.2) * 4;
-        
-        renderedJoints = renderedJoints.map(j => {
-          if (j.id === "head" || j.id === "neck") {
-            return { ...j, x: j.x + cvSwayX * 1.5, y: j.y + cvSwayY * 1.5 };
-          }
-          if (j.id.includes("shoulder") || j.id.includes("elbow") || j.id === "spine") {
-            return { ...j, x: j.x + cvSwayX * 0.6, y: j.y + cvSwayY * 0.5 };
-          }
-          return j;
         });
       }
 
@@ -662,7 +665,7 @@ export default function RiggingMoCap() {
         cancelAnimationFrame(animationFrameId.current);
       }
     };
-  }, [joints, activeJoint, selectedChar, activeMotion, motionSpeed, motionIntensity, cameraActive, cameraTracking]);
+  }, [joints, activeJoint, selectedChar, activeMotion, motionSpeed, motionIntensity]);
 
   // Handle Dragging of Skeleton Nodes
   const handleMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
@@ -731,21 +734,6 @@ export default function RiggingMoCap() {
     setCurrentFrameIndex(0);
   };
 
-  // TRIGGER VEO MOTION RENDER
-  const handleRenderVeoMotion = () => {
-    // Create a descriptive motion script from current joint proportions or active motion
-    const customPrompt = `A stylized character (${selectedChar.name}) performing high-fidelity physical motion capture dynamics: ${
-      activeMotion ? MOTION_PRESETS.find(m => m.id === activeMotion)?.description : "a custom articulated structural stance with cybernetic joints."
-    } Rendered in stunning atmospheric cinematic visual style, volumetric lighting, unreal engine 5, 8k. Preset theme: ${selectedChar.visualStyle}.`;
-
-    veoRender.start("/api/text-to-video", {
-      prompt: customPrompt,
-      aspectRatio: "16:9",
-      motionStyle: activeMotion || "orbit-rotation",
-      vibe: selectedChar.visualStyle,
-    });
-  };
-
   return (
     <div className="flex flex-col gap-6" id="mocap-rigging-workspace">
       
@@ -755,15 +743,15 @@ export default function RiggingMoCap() {
         <div className="flex justify-between items-start md:items-center flex-col md:flex-row gap-4">
           <div>
             <div className="flex items-center gap-2 mb-1.5">
-              <span className="text-[11px] font-mono text-fg">MODULE_05</span>
-              <h2 className="text-xs uppercase tracking-widest font-semibold text-fg/80">Character Rigging & Motion Capture</h2>
+              <span className="text-[11px] font-mono text-fg">04</span>
+              <h2 className="text-xs uppercase tracking-widest font-semibold text-fg/80">Motion rig</h2>
             </div>
             <p className="text-xs text-muted max-w-xl">
-              Animate characters procedural-ly, rig 2D skeletons, connect live camera motion tracking markers, or record sequence keyframes. Synchronized with Veo generative animation systems.
+              Pose the skeleton by dragging joints, layer a motion on top, or record keyframes. Save the result as a clip, then cast it in any storyboard scene.
             </p>
           </div>
           <span className="text-[11px] font-mono bg-fg/[0.05] text-fg px-2 py-1 border border-fg/60 uppercase tracking-widest">
-            Kinetic Engine
+            {clips.length} clips in project
           </span>
         </div>
       </div>
@@ -785,7 +773,7 @@ export default function RiggingMoCap() {
             </div>
 
             <div className="grid grid-cols-2 gap-2">
-              {CHARACTER_PRESETS.map((c) => (
+              {characterOptions.map((c) => (
                 <button
                   key={c.id}
                   onClick={() => setSelectedChar(c)}
@@ -1021,27 +1009,9 @@ export default function RiggingMoCap() {
                     muted
                     className="w-full h-full object-cover scale-x-[-1]"
                   />
-                  {/* High Tech skeletal mock overlay on face stream */}
-                  <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
-                    <div className="absolute w-12 h-12 border border-ok/40 rounded-full animate-pulse flex items-center justify-center">
-                      <div className="w-1.5 h-1.5 bg-ok rounded-full"></div>
-                    </div>
-                    {/* Secondary tracking points */}
-                    <span className="absolute top-4 left-6 w-1 h-1 bg-accent rounded-full animate-ping"></span>
-                    <span className="absolute top-4 right-6 w-1 h-1 bg-accent rounded-full animate-ping"></span>
-                    <span className="absolute bottom-6 left-12 w-1.5 h-1.5 bg-ok rounded-full animate-pulse"></span>
-                  </div>
                 </div>
                 <div className="py-1 px-2 flex justify-between items-center text-[11px] font-mono bg-black border-t border-line">
-                  <span className="text-ok uppercase tracking-wider animate-pulse">● TRACKING_ACTIVE</span>
-                  <button 
-                    onClick={() => setCameraTracking(!cameraTracking)}
-                    className={`px-1.5 py-0.5 rounded-sm uppercase ${
-                      cameraTracking ? "bg-fg/[0.05] text-fg border border-fg/60" : "bg-raised text-muted"
-                    }`}
-                  >
-                    {cameraTracking ? "Sync" : "Mute"}
-                  </button>
+                  <span className="text-muted uppercase tracking-wider">Reference mirror</span>
                 </div>
               </div>
             )}
@@ -1049,7 +1019,7 @@ export default function RiggingMoCap() {
             {/* Absolute HUD Top bar overlay */}
             <div className="absolute top-4 left-4 right-4 flex justify-between items-center pointer-events-none z-10">
               <span className="bg-black/80 px-2.5 py-1 text-[11px] font-mono text-fg uppercase tracking-widest border border-fg/60 rounded-sm">
-                ● RIGGING HUD / CALIBRATION CANVAS
+                Rig · drag the joints
               </span>
               <div className="flex gap-2 pointer-events-auto">
                 <button
@@ -1061,7 +1031,7 @@ export default function RiggingMoCap() {
                   }`}
                 >
                   <Camera className="w-3.5 h-3.5" />
-                  {cameraActive ? "Webcam Off" : "Webcam MoCap"}
+                  {cameraActive ? "Hide mirror" : "Reference mirror"}
                 </button>
               </div>
             </div>
@@ -1084,90 +1054,105 @@ export default function RiggingMoCap() {
             </div>
           )}
 
-          {/* Veo Output / Render Control Section */}
-          <div className="bg-surface border border-line p-5 flex flex-col gap-4">
-            <div className="flex justify-between items-center">
-              <div className="flex items-center gap-2">
-                <span className="text-[11px] font-mono text-fg/40">E</span>
-                <h3 className="text-xs uppercase tracking-widest font-semibold text-fg/80">Generative MoCap Video Synthesis</h3>
-              </div>
-              <span className="text-[11px] font-mono text-fg px-1.5 py-0.5 border border-fg/60 uppercase">
-                Veo-3.1 Pipeline
-              </span>
-            </div>
-
-            <p className="text-xs text-muted leading-relaxed">
-              Export your custom skeletal proportions and keyframe sequences straight into the high-fidelity Veo video generation pipeline. This renders a finished animation sequence featuring your selected character style.
-            </p>
-
-            {renderStatus !== "idle" && (
-              <div className="bg-black/40 border border-line p-4 rounded-sm flex flex-col gap-3">
-                <div className="flex justify-between items-center text-[11px] font-mono">
-                  <span className="uppercase text-fg flex items-center gap-1.5 animate-pulse">
-                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                    {renderStatus === "rendering" && "Synthesizing Skeletal Motion Video..."}
-                    {renderStatus === "completed" && "Veo Render Completed Successfully!"}
-                    {renderStatus === "error" && "Skeletal Render Pipeline Error"}
-                  </span>
-                  <span>{renderProgress}%</span>
-                </div>
-
-                <div className="w-full bg-fg/5 h-1 rounded-full overflow-hidden">
-                  <div
-                    style={{ width: `${renderProgress}%` }}
-                    className="bg-accent h-full transition-all duration-1000"
-                  ></div>
-                </div>
-
-                {renderError && (
-                  <p className="text-[11px] font-mono text-danger leading-normal">
-                    {renderError}
-                  </p>
-                )}
-
-                {renderedVideoUrl && (
-                  <div className="mt-2 flex flex-col gap-3">
-                    <video
-                      src={renderedVideoUrl}
-                      controls
-                      autoPlay
-                      loop
-                      className="w-full aspect-video bg-black border border-line"
-                    />
-                    <div className="flex justify-end">
-                      <button
-                        onClick={() => {
-                          const a = document.createElement("a");
-                          a.href = renderedVideoUrl;
-                          a.download = `ZH-mocap-video-${Date.now()}.mp4`;
-                          a.click();
-                        }}
-                        className="px-4 py-2 bg-ok hover:bg-ok text-ink text-[11px] font-bold font-mono uppercase rounded-xs transition-all flex items-center gap-1.5 cursor-pointer shadow-md"
-                      >
-                        <Download className="w-3.5 h-3.5" />
-                        Download Rendered Animation
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {renderStatus !== "rendering" && (
-              <button
-                onClick={handleRenderVeoMotion}
-                className="w-full py-3.5 bg-gradient-to-r from-accent to-accent hover:from-accent hover:to-accent text-fg font-bold uppercase tracking-[0.2em] text-xs transition-all cursor-pointer flex items-center justify-center gap-2 relative shadow-lg active:scale-[0.99]"
-              >
-                <Video className="w-4 h-4 text-fg animate-pulse" />
-                <span>Render Character Video with Veo</span>
-              </button>
-            )}
-          </div>
-
+          <ClipSaver joints={joints} keyframes={keyframes} activeMotion={activeMotion} motionSpeed={motionSpeed} motionIntensity={motionIntensity} clips={clips} onSave={onSaveClip} onDelete={onDeleteClip} onLoad={(clip) => {
+            setJoints((current) => current.map((j) => (clip.pose[j.id] ? { ...j, ...clip.pose[j.id] } : j)));
+            setActiveMotion(clip.motion);
+            setMotionSpeed(clip.speed);
+            setMotionIntensity(clip.intensity);
+            setKeyframes(clip.keyframes.map((k, n) => ({ id: `kf_${n}_${Date.now()}`, joints: k })));
+          }} />
         </div>
 
       </div>
 
+    </div>
+  );
+}
+
+/** Save the current pose, motion and keyframes as a clip the storyboard can cast. */
+function ClipSaver({
+  joints,
+  keyframes,
+  activeMotion,
+  motionSpeed,
+  motionIntensity,
+  clips,
+  onSave,
+  onDelete,
+  onLoad,
+}: {
+  joints: Joint[];
+  keyframes: Keyframe[];
+  activeMotion: string | null;
+  motionSpeed: number;
+  motionIntensity: number;
+  clips: RigClip[];
+  onSave: (clip: RigClip) => void;
+  onDelete: (id: string) => void;
+  onLoad: (clip: RigClip) => void;
+}) {
+  const [name, setName] = useState("");
+  const [frameSeconds, setFrameSeconds] = useState(0.8);
+  const [saved, setSaved] = useState("");
+
+  const save = (existing?: RigClip) => {
+    const pose = keyframes.length
+      ? keyframes[0].joints
+      : Object.fromEntries(joints.map((j) => [j.id, { x: j.x, y: j.y }]));
+    const clip: RigClip = {
+      id: existing?.id ?? newId("clip"),
+      name: name.trim() || existing?.name || MOTION_PRESETS.find((m) => m.id === activeMotion)?.name || `Clip ${clips.length + 1}`,
+      pose: { ...STANDING_POSE, ...pose },
+      motion: (activeMotion as MotionId | null) ?? null,
+      speed: motionSpeed,
+      intensity: motionIntensity,
+      keyframes: keyframes.map((k) => k.joints),
+      keyframeSeconds: frameSeconds,
+    };
+    onSave(clip);
+    setSaved(clip.name);
+    setName("");
+  };
+
+  return (
+    <div className="flex flex-col gap-4 border border-line bg-surface p-5">
+      <div className="flex items-baseline justify-between">
+        <h3 className="text-[15px] font-medium text-fg">Save as clip</h3>
+        <span className="eyebrow">Used by the storyboard</span>
+      </div>
+      <p className="text-[13px] leading-relaxed text-muted">
+        Saves the pose{keyframes.length ? `, ${keyframes.length} keyframes` : ""}
+        {activeMotion ? ` and the ${MOTION_PRESETS.find((m) => m.id === activeMotion)?.name.toLowerCase()} motion` : ""}. Cast it into any scene from the storyboard's Scene panel.
+      </p>
+      <Field label="Clip name" htmlFor="clip-name">
+        <input id="clip-name" value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Hero runs in" className={inputClass} />
+      </Field>
+      {keyframes.length > 1 && (
+        <Slider label="Time per keyframe" value={frameSeconds} min={0.2} max={2} step={0.1} onChange={setFrameSeconds} format={(v) => `${v.toFixed(1)}s`} />
+      )}
+      <Button variant="primary" onClick={() => save()}>
+        Save clip
+      </Button>
+      {saved && <Notice>Saved “{saved}”. It's ready to cast in the storyboard.</Notice>}
+      {clips.length > 0 && (
+        <ul className="flex flex-col divide-y divide-line border-y border-line">
+          {clips.map((c) => (
+            <li key={c.id} className="flex items-center gap-2 py-2">
+              <span className="min-w-0 flex-1 truncate text-[14px] text-fg">{c.name}</span>
+              <span className="eyebrow text-faint">{c.keyframes.length ? `${c.keyframes.length} keys` : c.motion ?? "pose"}</span>
+              <Button size="sm" variant="ghost" onClick={() => onLoad(c)}>
+                Load
+              </Button>
+              <Button size="sm" variant="ghost" onClick={() => save(c)} title="Overwrite with the current rig">
+                Update
+              </Button>
+              <IconButton label={`Delete ${c.name}`} onClick={() => onDelete(c.id)}>
+                <Trash className="h-4 w-4" />
+              </IconButton>
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   );
 }

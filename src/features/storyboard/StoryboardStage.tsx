@@ -1,15 +1,28 @@
-import { useId } from "react";
-import type { Scene } from "../../types";
+import { useId, useRef, type PointerEvent as ReactPointerEvent } from "react";
+import type { CharacterLook, Grade, RigClip, Scene } from "../../types";
 import { useAudioLevels } from "./useAudioLevels";
-import { FRAME_H, FRAME_W, computeFrame, itemTransform, layerTransform } from "./sceneModel";
+import { FRAME_H, FRAME_W, castFigures, computeFrame, gradeFilter, itemTransform, layerTransform } from "./sceneModel";
 
-/** The live picture: an SVG render of the scene plus the title card. */
+export type StageSelection = { kind: "element"; index: number } | { kind: "cast"; index: number } | null;
+
+/**
+ * The live picture: an SVG render of the scene, cast characters, colour grade
+ * and the title card. In layout mode (paused editing) the camera holds still
+ * and shapes and characters can be dragged directly on the picture.
+ */
 export function StoryboardStage({
   scene,
   elapsed,
   isPlaying,
   backdropUrl,
   thumbnail,
+  characters = [],
+  clips = [],
+  grade,
+  layout,
+  selection,
+  onSelect,
+  onMove,
 }: {
   scene: Scene;
   elapsed: number;
@@ -17,20 +30,66 @@ export function StoryboardStage({
   backdropUrl?: string;
   /** Picture only, no title card (used by the filmstrip) */
   thumbnail?: boolean;
+  characters?: CharacterLook[];
+  clips?: RigClip[];
+  grade?: Grade;
+  /** Hold the camera still and enable direct manipulation */
+  layout?: boolean;
+  selection?: StageSelection;
+  onSelect?: (sel: StageSelection) => void;
+  onMove?: (sel: NonNullable<StageSelection>, x: number, y: number) => void;
 }) {
-  const levels = useAudioLevels(isPlaying);
+  const levels = useAudioLevels(isPlaying && !thumbnail);
   const frame = computeFrame(scene, elapsed, levels);
+  const figures = castFigures(scene, elapsed, characters, clips);
   const uid = useId().replace(/:/g, "");
+  const svgRef = useRef<SVGSVGElement>(null);
+  const dragRef = useRef<NonNullable<StageSelection> | null>(null);
+
+  // In layout mode the camera is neutral so shapes sit exactly where they're dragged
+  const layers = layout ? frame.layers.map((l) => ({ ...l, zoom: 1, dx: 0, dy: 0 })) : frame.layers;
+
+  const toPercent = (e: ReactPointerEvent) => {
+    const svg = svgRef.current;
+    const ctm = svg?.getScreenCTM();
+    if (!svg || !ctm) return null;
+    const pt = svg.createSVGPoint();
+    pt.x = e.clientX;
+    pt.y = e.clientY;
+    const p = pt.matrixTransform(ctm.inverse());
+    return { x: Math.max(0, Math.min(100, (p.x / FRAME_W) * 100)), y: Math.max(0, Math.min(100, (p.y / FRAME_H) * 100)) };
+  };
+
+  const startDrag = (sel: NonNullable<StageSelection>) => (e: ReactPointerEvent) => {
+    if (!layout) return;
+    e.stopPropagation();
+    svgRef.current?.setPointerCapture?.(e.pointerId);
+    dragRef.current = sel;
+    onSelect?.(sel);
+  };
+
+  const interactive = Boolean(layout && onSelect);
+  const vignette = (grade?.vignette ?? 35) / 100;
 
   return (
     <div className="@container absolute inset-0 overflow-hidden">
       <svg
+        ref={svgRef}
         viewBox={`0 0 ${FRAME_W} ${FRAME_H}`}
         preserveAspectRatio="xMidYMid slice"
-        className="absolute inset-0 h-full w-full"
+        className={interactive ? "absolute inset-0 h-full w-full touch-none" : "absolute inset-0 h-full w-full"}
+        style={grade ? { filter: gradeFilter(grade) } : undefined}
         role={thumbnail ? undefined : "img"}
         aria-hidden={thumbnail || undefined}
-        aria-label={thumbnail ? undefined : scene.visualDescription}
+        aria-label={thumbnail ? undefined : scene.visualDescription || scene.title}
+        onPointerMove={(e) => {
+          if (!dragRef.current || !onMove) return;
+          const p = toPercent(e);
+          if (p) onMove(dragRef.current, Math.round(p.x * 10) / 10, Math.round(p.y * 10) / 10);
+        }}
+        onPointerUp={() => (dragRef.current = null)}
+        onPointerCancel={() => (dragRef.current = null)}
+        onPointerDown={() => interactive && onSelect?.(null)}
       >
         <defs>
           <linearGradient id={`bg-${uid}`} x1="0" y1="0" x2="1" y2="1">
@@ -39,59 +98,101 @@ export function StoryboardStage({
             ))}
           </linearGradient>
           <radialGradient id={`vig-${uid}`} cx="0.5" cy="0.45" r="0.75">
-            <stop offset="0.55" stopColor="#000" stopOpacity="0" />
-            <stop offset="1" stopColor="#000" stopOpacity="0.7" />
+            <stop offset="0.5" stopColor="#000" stopOpacity="0" />
+            <stop offset="1" stopColor="#000" stopOpacity={Math.min(1, vignette * 1.6)} />
           </radialGradient>
         </defs>
 
         <rect width={FRAME_W} height={FRAME_H} fill={`url(#bg-${uid})`} />
-        {backdropUrl && (
-          <image href={backdropUrl} width={FRAME_W} height={FRAME_H} preserveAspectRatio="xMidYMid slice" />
-        )}
+        {backdropUrl && <image href={backdropUrl} width={FRAME_W} height={FRAME_H} preserveAspectRatio="xMidYMid slice" />}
 
-        {frame.layers.map((layer, li) => (
+        {layers.map((layer, li) => (
           <g key={li} transform={layerTransform(layer)}>
-            {layer.items.map((item, ii) => (
-              <path
-                key={ii}
-                d={item.d}
-                transform={itemTransform(item)}
-                opacity={item.opacity}
-                fill={item.stroked ? "none" : item.color}
-                stroke={item.stroked ? item.color : "none"}
-                strokeWidth={item.stroked ? item.strokeWidth : 0}
-                strokeLinecap="round"
-              />
-            ))}
+            {layer.items.map((item) => {
+              const selected = interactive && selection?.kind === "element" && selection.index === item.index;
+              return (
+                <g key={item.index}>
+                  <path
+                    d={item.d}
+                    transform={itemTransform(item)}
+                    opacity={item.opacity}
+                    fill={item.stroked ? "none" : item.color}
+                    stroke={item.stroked ? item.color : "none"}
+                    strokeWidth={item.stroked ? item.strokeWidth : 0}
+                    strokeLinecap="round"
+                    onPointerDown={interactive ? startDrag({ kind: "element", index: item.index }) : undefined}
+                    style={interactive ? { cursor: "move" } : undefined}
+                  />
+                  {selected && (
+                    <path
+                      d={item.d}
+                      transform={itemTransform(item)}
+                      fill="none"
+                      stroke="#ffb224"
+                      strokeWidth={3 / item.scale}
+                      strokeDasharray={`${8 / item.scale} ${6 / item.scale}`}
+                      pointerEvents="none"
+                    />
+                  )}
+                </g>
+              );
+            })}
+            {/* Cast characters perform in the midground */}
+            {li === 1 &&
+              figures.map((f, fi) => {
+                const selected = interactive && selection?.kind === "cast" && selection.index === fi;
+                return (
+                  <g
+                    key={`cast-${fi}`}
+                    transform={f.transform}
+                    onPointerDown={interactive ? startDrag({ kind: "cast", index: fi }) : undefined}
+                    style={interactive ? { cursor: "move" } : undefined}
+                  >
+                    {selected && <rect x={60} y={20} width={280} height={470} fill="none" stroke="#ffb224" strokeWidth={4} strokeDasharray="14 10" />}
+                    {interactive && <rect x={110} y={40} width={180} height={440} fill="transparent" />}
+                    {f.strokes.map((s, si) => (
+                      <line key={si} x1={s.x1} y1={s.y1} x2={s.x2} y2={s.y2} stroke={s.color} strokeWidth={s.width} strokeLinecap="round" />
+                    ))}
+                    {f.head.map((h, hi) => (
+                      <path key={hi} d={h.d} fill={h.fill} />
+                    ))}
+                  </g>
+                );
+              })}
           </g>
         ))}
 
-        <g fill={frame.particleColor} opacity={frame.particleOpacity}>
+        <g fill={frame.particleColor} opacity={frame.particleOpacity} pointerEvents="none">
           {frame.particles.map((pt, i) => (
             <circle key={i} cx={pt.x} cy={pt.y} r={pt.r} opacity={pt.alpha} />
           ))}
         </g>
 
-        <rect width={FRAME_W} height={FRAME_H} fill={`url(#vig-${uid})`} />
+        {grade && grade.tintAmount > 0 && (
+          <rect width={FRAME_W} height={FRAME_H} fill={grade.tint} opacity={grade.tintAmount / 100} style={{ mixBlendMode: "soft-light" }} pointerEvents="none" />
+        )}
+        <rect width={FRAME_W} height={FRAME_H} fill={`url(#vig-${uid})`} pointerEvents="none" />
       </svg>
 
       {/* Title card: the scene title slammed lower-left, narration as a subtitle */}
-      {!thumbnail && <div
-        key={scene.sceneNumber + scene.title}
-        className="pointer-events-none absolute inset-x-0 bottom-[7%] bg-gradient-to-t from-black/75 via-black/35 to-transparent p-[4cqw] pb-[3.5cqw] pt-[8cqw]"
-      >
-        <p className="font-mono text-[max(10px,1.05cqw)] uppercase tracking-[0.14em] text-fg/70">
-          Scene {String(scene.sceneNumber).padStart(2, "0")}
-        </p>
-        <h3 className="animate-rise mt-[0.6cqw] max-w-[85%] font-display text-[clamp(1.1rem,7.2cqw,7rem)] uppercase leading-[0.86] tracking-[-0.005em] text-fg">
-          {scene.title}
-        </h3>
-        <p
-          className="animate-rise mt-[1.2cqw] hidden max-w-[62ch] font-serif @[30rem]:block text-[clamp(0.95rem,2cqw,1.75rem)] italic leading-snug text-fg/85 [animation-delay:120ms]"
+      {!thumbnail && (scene.title || scene.narration) && (
+        <div
+          key={scene.sceneNumber + scene.title}
+          className="pointer-events-none absolute inset-x-0 bottom-[7%] bg-gradient-to-t from-black/75 via-black/35 to-transparent p-[4cqw] pb-[3.5cqw] pt-[8cqw]"
         >
-          {scene.narration}
-        </p>
-      </div>}
+          <p className="font-mono text-[max(10px,1.05cqw)] uppercase tracking-[0.14em] text-fg/70">
+            Scene {String(scene.sceneNumber).padStart(2, "0")}
+          </p>
+          <h3 className="animate-rise mt-[0.6cqw] max-w-[85%] font-display text-[clamp(1.1rem,7.2cqw,7rem)] uppercase leading-[0.86] tracking-[-0.005em] text-fg">
+            {scene.title}
+          </h3>
+          {scene.narration && (
+            <p className="animate-rise mt-[1.2cqw] hidden max-w-[62ch] font-serif text-[clamp(0.95rem,2cqw,1.75rem)] italic leading-snug text-fg/85 [animation-delay:120ms] @[30rem]:block">
+              {scene.narration}
+            </p>
+          )}
+        </div>
+      )}
     </div>
   );
 }

@@ -1,4 +1,8 @@
 import React, { useState, useEffect, useRef } from "react";
+import type { CharacterLook, Grade } from "../types";
+import { GRADE_PRESETS } from "../project/rig";
+import { newId } from "../project/storage";
+import { Button, Field, IconButton, Notice, inputClass } from "../ui";
 import {
   Sparkles,
   Palette,
@@ -21,64 +25,19 @@ import {
 } from "lucide-react";
 
 // Types for the Creative Suite
-interface SuggestionCard {
-  sceneNumber: number;
-  title: string;
-  flowDescription: string;
-  cameraAngle: string;
-  cameraReason: string;
-  transitionType: string;
-  transitionReason: string;
-  vfxNotes: string;
-}
-
-interface CreativeSuggestions {
-  emotionalArc: string;
-  cinematicVibe: string;
-  suggestions: SuggestionCard[];
-}
-
-export default function CreativeSuite() {
-  // --- Section 1: Storyboarding Assistance States ---
-  const [sequencePrompt, setSequencePrompt] = useState("Quantum cybernetic gate opening inside a neon-lit cathedral, golden energy leaking");
-  const [selectedStyle, setSelectedStyle] = useState("cyberpunk");
-  const [isGeneratingSuggestions, setIsGeneratingSuggestions] = useState(false);
-  const [suggestionsResult, setSuggestionsResult] = useState<CreativeSuggestions | null>({
-    emotionalArc: "Starting in high-contrast digital stillness, building to a dramatic neon-saturated crescendo, and resolving in massive electromagnetic emission.",
-    cinematicVibe: "Anamorphic Cyberpunk Cathedral, utilizing dramatic vertical angles and rich crimson shadows.",
-    suggestions: [
-      {
-        sceneNumber: 1,
-        title: "The Quiet Sacred Terminal",
-        flowDescription: "Establish a wide shot of the dark, cybernetic cathedral. Columns of steel and fiber optic bundles rise into shadowed vault arches. A tiny figure stands before an offline quantum gate, casting a long silhouette.",
-        cameraAngle: "Extreme Low-Angle Wide Shot (24mm Lens)",
-        cameraReason: "Emphasizes the massive spiritual scale of the tech cathedral, making the user feel dwarfed by the architecture and building immediate awe.",
-        transitionType: "Bleed-in Cross Dissolve (2.0s)",
-        transitionReason: "Enables the soft blue fiber optic column lights to seep into existence slowly, signifying power booting up.",
-        vfxNotes: "Volumetric light shafts emitting from dark stained glass windows; gentle cyber sparks floating from columns."
-      },
-      {
-        sceneNumber: 2,
-        title: "Intimate Activation",
-        flowDescription: "Zoom into the terminal console. The terminal screens flicker with complex code. The character's hand approaches, placing a high-contrast glowing crystal core into the mechanical slot. Sparks eject upon contact.",
-        cameraAngle: "High-Contrast Macro Close-Up (90mm Lens)",
-        cameraReason: "Forces the focus onto the tactical physical contact and the detailed electrical arcing, focusing all dramatic attention on the critical trigger event.",
-        transitionType: "Anamorphic Focus Match Cut",
-        transitionReason: "Instantly links the hand's pressure with the subsequent cosmic gate alignment in the background, maintaining psychological focus.",
-        vfxNotes: "Bright lens flare across the frame; electric neon-blue sparks shooting in radial directions; chromatic aberration at frame edges."
-      },
-      {
-        sceneNumber: 3,
-        title: "Convergence & The Golden Rift",
-        flowDescription: "The quantum gate rotates violently. Giant mechanical rings spin in opposing directions. The center of the gate tears open, revealing a bright golden nebula, with digital geometric grids shooting outward into the cathedral.",
-        cameraAngle: "Sweeping Orbit Crane Shot with 15° Dutch Tilt",
-        cameraReason: "Introduces dynamic, gravity-defying movement that underscores the tearing of space-time and the sheer triumph of the breach.",
-        transitionType: "Kinetic Whip Pan",
-        transitionReason: "Matches the intense physical rotation of the mechanical rings, pulling the camera back at warp speed to reveal the final masterpiece landscape.",
-        vfxNotes: "Intense atmospheric bloom and light leaks; radial starfield streams converging at the center; heavy cinematic vignette."
-      }
-    ]
-  });
+export default function CreativeSuite({
+  characters,
+  grade,
+  onSaveCharacter,
+  onDeleteCharacter,
+  onApplyGrade,
+}: {
+  characters: CharacterLook[];
+  grade: Grade;
+  onSaveCharacter: (c: CharacterLook) => void;
+  onDeleteCharacter: (id: string) => void;
+  onApplyGrade: (g: Grade) => void;
+}) {
   const [statusMsg, setStatusMsg] = useState("");
 
   // --- Section 2: Emotion & Expression Control States ---
@@ -258,40 +217,17 @@ export default function CreativeSuite() {
     }
   };
 
-  // Run AI layout consultant
-  const consultAIDirector = async () => {
-    setIsGeneratingSuggestions(true);
-    setStatusMsg("Consulting Chloe (AI Creative Lead) & loading trends...");
-    try {
-      const response = await fetch("/api/artistic-suggestions", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          prompt: sequencePrompt,
-          style: selectedStyle,
-          currentScene: `Backdrop is ${backdrop}, character theme is ${costumeTheme} with face expressing ${expression}.`
-        })
-      });
-
-      if (!response.ok) {
-        throw new Error("Suggestions endpoint returned error status");
-      }
-
-      const data: CreativeSuggestions & { warning?: string } = await response.json();
-      setSuggestionsResult(data);
-      if (data.warning) {
-        setStatusMsg(data.warning);
-      } else {
-        setStatusMsg("Suggestions compiled successfully by AI!");
-      }
-    } catch (err: any) {
-      console.warn("Creative suggestions failed: ", err.message || err);
-      setStatusMsg("AI was busy; rendered premium local procedural storyboards.");
-    } finally {
-      setIsGeneratingSuggestions(false);
-      setTimeout(() => setStatusMsg(""), 6000);
-    }
-  };
+  // Open on the project's first character so "Update" edits what you see
+  useEffect(() => {
+    const c = characters[0];
+    if (!c) return;
+    setSkinColor(c.skin);
+    setHairColor(c.hair);
+    setEyeColor(c.eyes);
+    setCostumeAccentColor(c.accent);
+    setHairStyle(c.hairStyle);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Particle System Canvas Effect
   useEffect(() => {
@@ -623,12 +559,12 @@ export default function CreativeSuite() {
             <Palette className="w-5 h-5" />
           </div>
           <div>
-            <span className="text-[11px] font-mono tracking-widest text-fg font-bold uppercase">Active Workshop Module</span>
-            <h1 className="text-xl md:text-2xl font-serif font-medium tracking-tight mt-0.5 text-fg">Creative &amp; Artistic Studio</h1>
+            <span className="text-[11px] font-mono tracking-widest text-fg font-bold uppercase">03 · Characters</span>
+            <h1 className="text-xl md:text-2xl font-serif font-medium tracking-tight mt-0.5 text-fg">Characters &amp; look</h1>
           </div>
         </div>
         <p className="text-xs text-fg/50 max-w-md font-sans leading-relaxed">
-          Configure real-time scene flow, fine-tune facial gestures to sync with emotional dialogue subtext, customize secondary assets, and inject atmospheric VFX particles and light layers.
+          Design the cast — face, hair, colours, costume — and the film grade. Save a character and it appears in the Motion rig and the storyboard; apply the grade and every scene and export uses it.
         </p>
       </div>
 
@@ -648,140 +584,21 @@ export default function CreativeSuite() {
         {/* LEFT COLUMN: Controls Panel (Cols 12 -> 7) */}
         <div className="col-span-12 xl:col-span-7 flex flex-col gap-6">
 
-          {/* BLOCK 1: Storyboarding Assistance */}
-          <div className="bg-surface border border-line p-5 rounded-sm relative overflow-hidden flex flex-col gap-4">
-            <div className="absolute top-0 right-0 h-16 w-16 bg-gradient-to-bl from-fg/5 to-transparent pointer-events-none"></div>
-            <div className="flex justify-between items-center">
-              <div className="flex items-center gap-2">
-                <span className="text-[11px] font-mono text-fg">01</span>
-                <h2 className="text-xs uppercase tracking-widest font-semibold text-fg/80">Storyboarding Assistance</h2>
-              </div>
-              <span className="text-[11px] font-mono bg-fg/[0.05] text-fg border border-fg/60 px-2 py-0.5 rounded-sm">AI Layout Director</span>
-            </div>
-
-            <div className="flex flex-col gap-1.5">
-              <label className="text-[11px] uppercase font-bold text-fg/40 tracking-wider">Describe your narrative sequence idea</label>
-              <textarea
-                value={sequencePrompt}
-                onChange={(e) => setSequencePrompt(e.target.value)}
-                rows={2}
-                placeholder="Describe your story arc, cinematic vision, or specific scene sequence..."
-                className="w-full bg-ink border border-line rounded-sm p-3 font-serif italic text-sm text-fg focus:border-fg/60 focus:outline-none focus:ring-1 focus:ring-fg/40 transition-colors"
-              />
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="flex flex-col gap-1.5">
-                <label className="text-[11px] uppercase font-bold text-fg/40 tracking-wider">Cinematic Style Preset</label>
-                <select
-                  value={selectedStyle}
-                  onChange={(e) => {
-                    setSelectedStyle(e.target.value);
-                    setBackdrop(e.target.value === "anime" ? "forest" : e.target.value === "cyberpunk" ? "neon" : "observatory");
-                  }}
-                  className="bg-ink border border-line rounded-sm p-2 text-xs text-fg/80 focus:border-fg/60 focus:outline-none"
-                >
-                  <option value="cinema">Epic Cinematic</option>
-                  <option value="cyberpunk">Neon Cyberpunk</option>
-                  <option value="anime">Celestial Anime</option>
-                  <option value="watercolor">Ethereal Watercolor</option>
-                  <option value="line-art">Minimalist Line-Art</option>
-                  <option value="retro-pixel">8-Bit Retro Pixel</option>
-                </select>
-              </div>
-
-              <div className="flex items-end">
-                <button
-                  onClick={consultAIDirector}
-                  disabled={isGeneratingSuggestions}
-                  className="w-full bg-accent hover:bg-accent active:bg-accent disabled:bg-raised disabled:text-muted text-ink font-extrabold text-[11px] uppercase tracking-wider py-3.5 px-4 rounded-xs flex items-center justify-center gap-2 transition-all shadow-md cursor-pointer"
-                >
-                  {isGeneratingSuggestions ? (
-                    <>
-                      <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                      <span>Analyzing Sequence...</span>
-                    </>
-                  ) : (
-                    <>
-                      <Sparkles className="w-3.5 h-3.5 text-ink" />
-                      <span>Consult AI Director Chloe</span>
-                    </>
-                  )}
-                </button>
-              </div>
-            </div>
-
-            {/* AI Suggestion Output (Grounded Content Display) */}
-            {suggestionsResult && (
-              <div className="mt-4 border-t border-line pt-4 flex flex-col gap-4">
-                <div className="p-3 bg-surface border border-line rounded-xs">
-                  <p className="text-[11px] font-mono text-fg mb-1">
-                    <span className="font-bold">GEN-AI ASSESSMENT //</span> EST. EMOTIONAL ARC
-                  </p>
-                  <p className="text-xs font-serif italic text-fg/70 leading-relaxed mb-2">
-                    &ldquo;{suggestionsResult.emotionalArc}&rdquo;
-                  </p>
-                  <div className="flex items-center gap-1 text-[11px] text-fg/40">
-                    <span className="font-mono uppercase">Vibe preset:</span>
-                    <span className="text-fg/60 font-medium font-mono">{suggestionsResult.cinematicVibe}</span>
-                  </div>
-                </div>
-
-                <div className="flex flex-col gap-3">
-                  <div className="flex items-center gap-2 text-[11px] uppercase tracking-wider text-fg/50 font-bold">
-                    <Layers className="w-3 h-3 text-fg" />
-                    <span>Suggested Scene-by-Scene Flow &amp; Angles</span>
-                  </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                    {suggestionsResult.suggestions.map((s, idx) => (
-                      <div
-                        key={idx}
-                        className="p-3.5 bg-ink border border-line hover:border-fg/60 rounded-sm flex flex-col gap-2 transition-all group/card relative"
-                      >
-                        <div className="absolute top-2 right-2 text-[11px] font-mono text-fg/20 font-bold">
-                          CH. {s.sceneNumber}
-                        </div>
-                        <h4 className="text-[11px] font-bold text-fg pr-6 uppercase tracking-wider truncate">
-                          {s.title}
-                        </h4>
-                        
-                        <p className="text-[11px] text-fg/60 line-clamp-3 font-serif leading-relaxed italic border-l border-line pl-2">
-                          &ldquo;{s.flowDescription}&rdquo;
-                        </p>
-
-                        <div className="mt-1 flex flex-col gap-1.5 text-[11px]">
-                          <div className="bg-fg/[0.05] p-1.5 rounded-xs border border-fg/60">
-                            <span className="text-fg font-mono font-bold block">ANGLE &amp; FOCUS:</span>
-                            <span className="text-fg/80 font-serif leading-tight mt-0.5 block">{s.cameraAngle}</span>
-                            <span className="text-fg/40 leading-tight mt-1 block">{s.cameraReason}</span>
-                          </div>
-
-                          <div className="bg-fg/[0.05] p-1.5 rounded-xs border border-fg/60">
-                            <span className="text-fg font-mono font-bold block">TRANSITION:</span>
-                            <span className="text-fg/80 font-serif leading-tight mt-0.5 block">{s.transitionType}</span>
-                            <span className="text-fg/40 leading-tight mt-1 block">{s.transitionReason}</span>
-                          </div>
-                        </div>
-
-                        <button
-                          onClick={() => {
-                            setDialogueText(`This is Scene ${s.sceneNumber}: ${s.title}`);
-                            setStatusMsg(`Set context to: ${s.title}. Costume and camera notes adjusted Procedurally.`);
-                            setBackdrop(selectedStyle === "anime" ? "forest" : "neon");
-                            setTimeout(() => setStatusMsg(""), 3000);
-                          }}
-                          className="mt-2 text-center w-full py-1.5 border border-line hover:border-fg/60 hover:bg-fg/[0.05] text-fg/50 hover:text-fg text-[11px] font-mono uppercase tracking-wider rounded-xs transition-all cursor-pointer"
-                        >
-                          Adapt Rig Preset
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
+          <CharacterBar
+            characters={characters}
+            grade={grade}
+            look={{ skinColor, hairColor, eyeColor, costumeAccentColor, hairStyle, colorGrade, vfxContrast, vfxSaturation, vfxVignette }}
+            onLoad={(c) => {
+              setSkinColor(c.skin);
+              setHairColor(c.hair);
+              setEyeColor(c.eyes);
+              setCostumeAccentColor(c.accent);
+              setHairStyle(c.hairStyle);
+            }}
+            onSave={onSaveCharacter}
+            onDelete={onDeleteCharacter}
+            onApplyGrade={onApplyGrade}
+          />
 
           {/* BLOCK 2: Emotion & Expression Control */}
           <div className="bg-surface border border-line p-5 rounded-sm flex flex-col gap-5 relative">
@@ -1605,6 +1422,128 @@ export default function CreativeSuite() {
         </div>
 
       </div>
+    </div>
+  );
+}
+
+function mixHex(a: string, b: string, t: number) {
+  const pa = parseInt(a.slice(1, 7), 16);
+  const pb = parseInt(b.slice(1, 7), 16);
+  const ch = (sh: number) => Math.round(((pa >> sh) & 255) * (1 - t) + ((pb >> sh) & 255) * t);
+  return `#${[16, 8, 0].map((sh) => ch(sh).toString(16).padStart(2, "0")).join("")}`;
+}
+
+/** Save the character on screen to the project, and push the grade to the whole film. */
+function CharacterBar({
+  characters,
+  grade,
+  look,
+  onLoad,
+  onSave,
+  onDelete,
+  onApplyGrade,
+}: {
+  characters: CharacterLook[];
+  grade: Grade;
+  look: {
+    skinColor: string;
+    hairColor: string;
+    eyeColor: string;
+    costumeAccentColor: string;
+    hairStyle: CharacterLook["hairStyle"];
+    colorGrade: Exclude<Grade["preset"], "none">;
+    vfxContrast: number;
+    vfxSaturation: number;
+    vfxVignette: number;
+  };
+  onLoad: (c: CharacterLook) => void;
+  onSave: (c: CharacterLook) => void;
+  onDelete: (id: string) => void;
+  onApplyGrade: (g: Grade) => void;
+}) {
+  const [editingId, setEditingId] = useState<string | null>(characters[0]?.id ?? null);
+  const [name, setName] = useState(characters[0]?.name ?? "");
+  const [notice, setNotice] = useState("");
+  const editing = characters.find((c) => c.id === editingId);
+
+  const save = (asNew: boolean) => {
+    const c: CharacterLook = {
+      id: !asNew && editing ? editing.id : newId("char"),
+      name: name.trim() || (asNew ? `Character ${characters.length + 1}` : editing?.name ?? "Character"),
+      skin: look.skinColor,
+      hair: look.hairColor,
+      eyes: look.eyeColor,
+      accent: look.costumeAccentColor,
+      costume: mixHex(look.costumeAccentColor, "#14141a", 0.72),
+      hairStyle: look.hairStyle,
+    };
+    onSave(c);
+    setEditingId(c.id);
+    setName(c.name);
+    setNotice(`Saved ${c.name}. Cast them in a scene from the storyboard.`);
+  };
+
+  const applyGrade = () => {
+    const base = GRADE_PRESETS[look.colorGrade];
+    onApplyGrade({ ...base, contrast: look.vfxContrast, saturation: look.vfxSaturation, vignette: look.vfxVignette });
+    setNotice(`Applied the ${look.colorGrade.replace("-", " ")} grade to the whole film.`);
+  };
+
+  return (
+    <div className="flex flex-col gap-4 border border-line bg-surface p-5">
+      <div className="flex items-baseline justify-between">
+        <h2 className="text-[15px] font-medium text-fg">Project cast</h2>
+        <span className="eyebrow">{characters.length} characters</span>
+      </div>
+      {characters.length > 0 && (
+        <ul className="flex flex-wrap gap-2">
+          {characters.map((c) => (
+            <li key={c.id} className="flex items-center">
+              <button
+                type="button"
+                onClick={() => {
+                  setEditingId(c.id);
+                  setName(c.name);
+                  onLoad(c);
+                  setNotice("");
+                }}
+                aria-pressed={c.id === editingId}
+                className={`flex items-center gap-2 rounded-full border py-1 pl-1.5 pr-3 text-[13px] transition-colors ${c.id === editingId ? "border-fg/70 text-fg" : "border-line text-muted hover:text-fg"}`}
+              >
+                <span className="flex h-5 w-5 overflow-hidden rounded-full ring-1 ring-fg/20" aria-hidden>
+                  <span className="flex-1" style={{ background: c.hair }} />
+                  <span className="flex-1" style={{ background: c.skin }} />
+                  <span className="flex-1" style={{ background: c.accent }} />
+                </span>
+                {c.name}
+              </button>
+              {c.id === editingId && characters.length > 1 && (
+                <IconButton label={`Delete ${c.name}`} onClick={() => { onDelete(c.id); setEditingId(null); setName(""); }}>
+                  &times;
+                </IconButton>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+      <Field label="Name" htmlFor="char-name">
+        <input id="char-name" value={name} onChange={(e) => setName(e.target.value)} placeholder="Who is this?" className={inputClass} />
+      </Field>
+      <div className="grid grid-cols-2 gap-2">
+        <Button variant="primary" onClick={() => save(!editing)}>
+          {editing ? `Update ${editing.name}` : "Save character"}
+        </Button>
+        <Button onClick={() => save(true)}>Save as new</Button>
+      </div>
+      <div className="flex flex-wrap items-center justify-between gap-3 border-t border-line pt-4">
+        <p className="text-[13px] text-muted">
+          Film grade: <span className="text-fg">{grade.preset === "none" ? "neutral" : grade.preset.replace("-", " ")}</span>
+        </p>
+        <Button size="sm" onClick={applyGrade}>
+          Apply this grade to the film
+        </Button>
+      </div>
+      {notice && <Notice>{notice}</Notice>}
     </div>
   );
 }

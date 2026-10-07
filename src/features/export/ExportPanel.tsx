@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Download, Square, Video } from "lucide-react";
 import type { Storyboard } from "../../types";
 import { Button, Field, Notice, Progress, Section, Segmented, downloadUrl } from "../../ui";
-import { recordStoryboard, supportedRecordingType } from "./recordStoryboard";
+import { recordStoryboard, supportedRecordingType, type DrawExtras } from "./recordStoryboard";
 
 const RESOLUTIONS = {
   "720p": { width: 1280, height: 720, label: "720p" },
@@ -23,12 +23,14 @@ export function ExportPanel({
   bpm,
   scale,
   stopPlayback,
+  extras,
 }: {
   storyboard: Storyboard;
   backdrops: Record<number, string>;
   bpm: number;
   scale: string;
   stopPlayback: () => void;
+  extras: DrawExtras;
 }) {
   const format = useMemo(supportedRecordingType, []);
   const [resolution, setResolution] = useState<ResolutionKey>("1080p");
@@ -63,7 +65,7 @@ export function ExportPanel({
       const out = await recordStoryboard(
         storyboard,
         canvasRef.current,
-        { width, height, fps: Number(fps), bitrateMbps: bitrate, withAudio, bpm, scale, backdrops },
+        { width, height, fps: Number(fps), bitrateMbps: bitrate, withAudio, bpm, scale, backdrops, ...extras },
         setProgress,
         controller.signal,
       );

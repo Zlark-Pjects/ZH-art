@@ -1,6 +1,5 @@
 {
   "name": "ZH-art",
-  "description": "An AI-powered video and storyboard generator that creates animated sequences with custom visual styles and synthesized background music.",
-  "requestFramePermissions": ["camera"],
-  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+  "description": "A browser-based film studio: build storyboards, design and animate characters, score them and export finished videos. No AI or API keys required.",
+  "requestFramePermissions": ["camera"]
 }

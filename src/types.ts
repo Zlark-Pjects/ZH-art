@@ -40,6 +40,72 @@ export interface Scene {
   cameraMotion: CameraMotion;
   elements: ElementSpec[];
   particles: ParticleSpec;
+  /** Asset id of an uploaded backdrop image */
+  backdrop?: string;
+  /** Characters performing in this scene */
+  cast?: CastMember[];
+}
+
+/* ---------- Studio project ---------- */
+
+/** A character designed in the Characters tab. */
+export interface CharacterLook {
+  id: string;
+  name: string;
+  skin: string;
+  hair: string;
+  eyes: string;
+  costume: string;
+  accent: string;
+  hairStyle: "sleek" | "quantum" | "mech" | "ethereal";
+}
+
+export type MotionId = "idle" | "run" | "float" | "strike" | "wave";
+
+/** An animation made in the Motion rig tab. */
+export interface RigClip {
+  id: string;
+  name: string;
+  /** Rest pose the clip starts from: joint id -> position in the 400x500 rig space */
+  pose: Record<string, { x: number; y: number }>;
+  motion: MotionId | null;
+  speed: number;
+  intensity: number;
+  /** Optional hand-made keyframes, played in a loop over the motion */
+  keyframes: Record<string, { x: number; y: number }>[];
+  keyframeSeconds: number;
+}
+
+/** A character placed in a scene, running a clip. */
+export interface CastMember {
+  characterId: string;
+  clipId: string;
+  x: number; // 0-100, feet position across the frame
+  y: number; // 0-100, feet position down the frame
+  scale: number; // fraction of frame height, 0.2-1
+  flip?: boolean;
+}
+
+/** Colour grade from the Characters tab, applied to the whole film. */
+export interface Grade {
+  preset: "none" | "teal-orange" | "noir" | "violet" | "gold" | "vivid";
+  contrast: number; // percent, 100 = neutral
+  saturation: number; // percent, 100 = neutral
+  vignette: number; // 0-100
+  tint: string; // hex
+  tintAmount: number; // 0-100
+}
+
+export interface Project {
+  id: string;
+  version: 1;
+  prompt: string;
+  board: Storyboard;
+  characters: CharacterLook[];
+  clips: RigClip[];
+  grade: Grade;
+  createdAt: number;
+  updatedAt: number;
 }
 
 export interface CrewMessage {

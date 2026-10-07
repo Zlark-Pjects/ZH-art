@@ -1,4 +1,5 @@
-import type { ElementSpec, Scene } from "../../types";
+import type { CharacterLook, ElementSpec, Grade, RigClip, Scene } from "../../types";
+import { RIG_FLOOR, figureFor, headPaths, poseAt, type FigureStroke } from "../../project/rig";
 
 /**
  * Pure description of one frame of a storyboard scene, shared by the live SVG
@@ -31,6 +32,8 @@ export interface Levels {
 }
 
 export interface FrameItem {
+  /** Index of the source element in scene.elements */
+  index: number;
   d: string;
   stroked: boolean;
   strokeWidth: number;
@@ -122,8 +125,9 @@ export function computeFrame(scene: Scene, t: number, levels: Levels): Frame {
     const cfg = DEPTHS[depth];
     const audioBoost = levels[cfg.audio] * (depth === 1 ? 0.15 : depth === 2 ? 0.2 : 0.25);
     const items = scene.elements
-      .filter((el) => (el.depth || 2) === depth)
-      .map((el, i): FrameItem => {
+      .map((el, index) => ({ el, index }))
+      .filter(({ el }) => (el.depth || 2) === depth)
+      .map(({ el, index }, i): FrameItem => {
         const shape = SHAPES[el.shape] ?? SHAPES.circle;
         const phase = i * 1.7 + depth;
         let rotate = 0;
@@ -136,6 +140,7 @@ export function computeFrame(scene: Scene, t: number, levels: Levels): Frame {
         if (el.movement === "glide") glide = Math.sin(t * 0.5 + phase) * 30;
         const size = (Math.max(10, el.size) / 900) * FRAME_W;
         return {
+          index,
           d: shape.d,
           stroked: shape.stroked,
           strokeWidth: cfg.stroke,
@@ -179,4 +184,51 @@ export function layerTransform(layer: FrameLayer) {
 
 export function itemTransform(item: FrameItem) {
   return `translate(${item.x} ${item.y}) rotate(${item.rotate}) scale(${item.scale}) translate(-50 -50)`;
+}
+
+/* ---------- Cast characters ---------- */
+
+export interface PlacedFigure {
+  /** SVG transform from rig space (400x500) into the 1600x900 frame */
+  transform: string;
+  /** Same placement as numbers, for canvas */
+  x: number;
+  y: number;
+  scale: number;
+  flip: boolean;
+  strokes: FigureStroke[];
+  head: { d: string; fill: string }[];
+}
+
+/** Figures for every cast member of the scene, posed at time t. */
+export function castFigures(scene: Scene, t: number, characters: CharacterLook[], clips: RigClip[]): PlacedFigure[] {
+  if (!scene.cast?.length) return [];
+  const out: PlacedFigure[] = [];
+  for (const member of scene.cast) {
+    const look = characters.find((c) => c.id === member.characterId);
+    const clip = clips.find((c) => c.id === member.clipId);
+    if (!look || !clip) continue;
+    const figure = figureFor(poseAt(clip, t), look);
+    const x = (member.x / 100) * FRAME_W;
+    const y = (member.y / 100) * FRAME_H;
+    // Rig height from head top (~50) to feet maps to `scale` of the frame height
+    const scale = (Math.max(0.1, member.scale) * FRAME_H) / (RIG_FLOOR - 50);
+    const flip = Boolean(member.flip);
+    out.push({
+      transform: `translate(${x} ${y}) scale(${flip ? -scale : scale} ${scale}) translate(-200 ${-RIG_FLOOR})`,
+      x,
+      y,
+      scale,
+      flip,
+      strokes: figure.strokes,
+      head: headPaths(figure.head),
+    });
+  }
+  return out;
+}
+
+/* ---------- Grade ---------- */
+
+export function gradeFilter(grade: Grade) {
+  return `contrast(${grade.contrast}%) saturate(${grade.saturation}%)`;
 }

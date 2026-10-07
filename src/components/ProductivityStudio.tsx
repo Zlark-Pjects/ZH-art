@@ -34,6 +34,7 @@ import {
 } from "lucide-react";
 import { Storyboard, Scene, CameraMotion, ParticleSpec, ElementSpec, VisualPreset, MusicPreset } from "../types";
 import { ExportPanel } from "../features/export/ExportPanel";
+import type { DrawExtras } from "../features/export/recordStoryboard";
 
 interface ProductivityStudioProps {
   storyboard: Storyboard | null;
@@ -50,6 +51,7 @@ interface ProductivityStudioProps {
   bpm: number;
   scale: string;
   stopPlayback: () => void;
+  exportExtras: DrawExtras;
 }
 
 // Visual layout helper for prebuilt template cards
@@ -80,6 +82,7 @@ export default function ProductivityStudio({
   bpm,
   scale,
   stopPlayback,
+  exportExtras,
 }: ProductivityStudioProps) {
   const [activeSubTab, setActiveSubTab] = useState<"sequence" | "templates" | "export">("sequence");
   const [statusMessage, setStatusMessage] = useState("");
@@ -745,7 +748,7 @@ export default function ProductivityStudio({
 
       {/* --- PANEL 3: EXPORT --- */}
       {activeSubTab === "export" && (
-        <ExportPanel storyboard={storyboard} backdrops={backdrops} bpm={bpm} scale={scale} stopPlayback={stopPlayback} />
+        <ExportPanel storyboard={storyboard} backdrops={backdrops} bpm={bpm} scale={scale} stopPlayback={stopPlayback} extras={exportExtras} />
       )}
 
     </div>

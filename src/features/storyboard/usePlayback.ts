@@ -31,6 +31,15 @@ export function usePlayback(storyboard: Storyboard | null) {
   useEffect(() => synth.updateBpm(bpm), [bpm]);
   useEffect(() => synth.setScale(scale), [scale]);
 
+  // Switching the mood while playing swaps the score without stopping the picture
+  const vibe = storyboard?.musicVibe;
+  const liveRef = useRef({ isPlaying, bpm, scale });
+  liveRef.current = { isPlaying, bpm, scale };
+  useEffect(() => {
+    const live = liveRef.current;
+    if (live.isPlaying && vibe) synth.start(vibe, live.scale, live.bpm);
+  }, [vibe]);
+
   const stop = useCallback(() => {
     setIsPlaying(false);
     synth.stop();

@@ -272,3 +272,101 @@ export function downloadUrl(url: string, filename: string) {
   a.click();
   a.remove();
 }
+
+/* ---------- Editor controls ---------- */
+
+export function Slider({
+  label,
+  value,
+  min,
+  max,
+  step = 1,
+  onChange,
+  format,
+}: {
+  label: string;
+  value: number;
+  min: number;
+  max: number;
+  step?: number;
+  onChange: (value: number) => void;
+  format?: (value: number) => string;
+}) {
+  const id = useId();
+  return (
+    <div className="flex flex-col gap-1.5">
+      <div className="flex items-baseline justify-between gap-3">
+        <label htmlFor={id} className="eyebrow">
+          {label}
+        </label>
+        <span className="font-mono text-[11px] tabular-nums text-muted">{format ? format(value) : value}</span>
+      </div>
+      <input id={id} type="range" min={min} max={max} step={step} value={value} onChange={(e) => onChange(Number(e.target.value))} className="w-full" />
+    </div>
+  );
+}
+
+export function ColorField({ label, value, onChange }: { label: string; value: string; onChange: (value: string) => void }) {
+  const id = useId();
+  return (
+    <label htmlFor={id} className="group flex min-w-0 items-center gap-2" title={`${label}: ${value}`}>
+      <span className="relative h-8 w-8 shrink-0 overflow-hidden rounded-[3px] ring-1 ring-line-strong transition group-hover:ring-fg/60">
+        <span className="absolute inset-0" style={{ background: value }} />
+        <input id={id} type="color" value={value.slice(0, 7)} onChange={(e) => onChange(e.target.value)} className="absolute inset-0 h-full w-full cursor-pointer opacity-0" />
+      </span>
+      <span className="min-w-0">
+        <span className="eyebrow block truncate">{label}</span>
+        <span className="block font-mono text-[11px] text-muted">{value.slice(0, 7)}</span>
+      </span>
+    </label>
+  );
+}
+
+export function RailTabs<T extends string>({
+  value,
+  onChange,
+  tabs,
+}: {
+  value: T;
+  onChange: (value: NoInfer<T>) => void;
+  tabs: { value: NoInfer<T>; label: string }[];
+}) {
+  return (
+    <div role="tablist" className="mb-2 grid border-b border-line" style={{ gridTemplateColumns: `repeat(${tabs.length}, minmax(0, 1fr))` }}>
+      {tabs.map((t) => {
+        const active = t.value === value;
+        return (
+          <button
+            key={t.value}
+            type="button"
+            role="tab"
+            aria-selected={active}
+            onClick={() => onChange(t.value)}
+            className={cx(
+              "relative py-3 text-[14px] transition-colors",
+              active ? "text-fg" : "text-muted hover:text-fg",
+            )}
+          >
+            {t.label}
+            <span aria-hidden className={cx("absolute inset-x-0 -bottom-px h-[2px] bg-fg transition-transform duration-300", active ? "scale-x-100" : "scale-x-0")} />
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+export function IconButton({ label, children, onClick, disabled }: { label: string; children: ReactNode; onClick: () => void; disabled?: boolean }) {
+  return (
+    <button
+      type="button"
+      aria-label={label}
+      title={label}
+      onClick={onClick}
+      disabled={disabled}
+      className="flex h-8 w-8 items-center justify-center rounded-[3px] text-muted transition-colors hover:bg-fg/[0.06] hover:text-fg disabled:pointer-events-none disabled:opacity-30"
+    >
+      {children}
+    </button>
+  );
+}

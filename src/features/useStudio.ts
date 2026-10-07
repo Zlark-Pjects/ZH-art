@@ -1,184 +1,91 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { MusicPreset, Storyboard, VisualPreset } from "../types";
-import { INITIAL_PROMPT } from "../lib/presets";
-import { useVideoRender } from "../lib/useVideoRender";
+import { STYLE_PALETTES, applyPalette, buildStoryboard } from "../project/builder";
+import { useProject } from "../project/useProject";
 import { usePlayback } from "./storyboard/usePlayback";
 
-export interface ServerStatus {
-  gemini: boolean;
-  huggingFace: boolean;
-}
-
-/** Shared studio state: the current storyboard and everything that edits it. */
+/**
+ * The whole studio: the shared project (autosaved), playback, and the
+ * offline storyboard builder. Every tab gets this one object.
+ */
 export function useStudio() {
-  const [prompt, setPrompt] = useState(INITIAL_PROMPT);
-  const [style, setStyle] = useState<VisualPreset>("cinema");
-  const [music, setMusic] = useState<MusicPreset>("ambient");
-  const [storyboard, setStoryboardState] = useState<Storyboard | null>(null);
-  const [history, setHistory] = useState<Storyboard[]>([]);
-  const [isGenerating, setIsGenerating] = useState(false);
-  const [generateError, setGenerateError] = useState("");
-  const [warningDismissed, setWarningDismissed] = useState(false);
-  const [serverStatus, setServerStatus] = useState<ServerStatus | null>(null);
+  const project = useProject();
+  const { board } = project.project;
+  const playback = usePlayback(board);
 
-  // Per-scene image backdrops (Hugging Face)
-  const [backdrops, setBackdrops] = useState<Record<number, string>>({});
-  const [hfPrompt, setHfPrompt] = useState("");
-  const [hfModel, setHfModel] = useState("black-forest-labs/FLUX.1-schnell");
-  const [isHfGenerating, setIsHfGenerating] = useState(false);
-  const [hfStatus, setHfStatus] = useState<{ tone: "info" | "warn" | "error"; text: string } | null>(null);
+  // Builder settings (inputs for "Build storyboard")
+  const [style, setStyle] = useState<VisualPreset>((board.visualStyle as VisualPreset) || "cinema");
+  const [sceneCount, setSceneCount] = useState(Math.min(6, Math.max(3, board.scenes.length)));
+  const [seed, setSeed] = useState(0);
+  const undoRef = useRef<Storyboard | null>(null);
+  const [canUndo, setCanUndo] = useState(false);
 
-  const playback = usePlayback(storyboard);
-  const veo = useVideoRender();
-  const [veoPrompt, setVeoPrompt] = useState("");
-
-  const promptRef = useRef(prompt);
-  promptRef.current = prompt;
-
-  const adopt = useCallback(
-    (board: Storyboard) => {
-      setStoryboardState(board);
-      playback.load(board);
-      setBackdrops({});
-      setWarningDismissed(false);
-    },
-    [playback.load],
-  );
-
-  const generate = useCallback(
-    async (opts: { template?: boolean } = {}) => {
-      setIsGenerating(true);
-      setGenerateError("");
-      veo.reset();
-      try {
-        const res = await fetch("/api/generate-storyboard", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            prompt: opts.template ? INITIAL_PROMPT : promptRef.current,
-            style,
-            musicVibe: music,
-            skipAI: Boolean(opts.template),
-          }),
-        });
-        if (!res.ok) {
-          const data = await res.json().catch(() => ({}));
-          throw new Error(data.error || `The server answered ${res.status}.`);
-        }
-        const board: Storyboard = await res.json();
-        adopt(board);
-        setHistory((prev) => [board, ...prev.filter((p) => p.title !== board.title)].slice(0, 6));
-      } catch (err: any) {
-        setGenerateError(err?.message || "Couldn't reach the server.");
-      } finally {
-        setIsGenerating(false);
-      }
-    },
-    [style, music, adopt, veo.reset],
-  );
-
-  // First load: a built-in template, so the stage is never empty
+  // Keep builder inputs in step when another project is opened
+  const projectId = project.project.id;
   useEffect(() => {
-    generate({ template: true });
-    fetch("/api/health")
-      .then((r) => (r.ok ? r.json() : null))
-      .then(setServerStatus)
-      .catch(() => setServerStatus(null));
+    setStyle((board.visualStyle as VisualPreset) || "cinema");
+    setSceneCount(Math.min(6, Math.max(3, board.scenes.length)));
+    undoRef.current = null;
+    setCanUndo(false);
+    playback.load(board);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [projectId]);
 
-  /** Replace the storyboard after an edit (reorder, duration change, template). */
-  const setStoryboard = useCallback((board: Storyboard | null) => {
-    setStoryboardState(board);
-  }, []);
+  const mood = board.musicVibe as MusicPreset;
+  const setMood = useCallback((m: MusicPreset) => project.patchBoard({ musicVibe: m }), [project.patchBoard]);
 
-  const restore = useCallback(
-    (board: Storyboard) => {
-      veo.reset();
-      adopt(board);
+  /** Compose a new storyboard from the prompt. Keeps characters, clips and grade. */
+  const build = useCallback(
+    (opts: { reroll?: boolean } = {}) => {
+      const nextSeed = opts.reroll ? seed + 1 : seed;
+      if (opts.reroll) setSeed(nextSeed);
+      const next = buildStoryboard({ idea: project.project.prompt, style, mood, sceneCount, seed: nextSeed });
+      undoRef.current = board;
+      setCanUndo(true);
+      project.setBoard(next);
+      playback.load(next);
     },
-    [adopt, veo.reset],
+    [seed, project.project.prompt, project.setBoard, style, mood, sceneCount, board, playback.load],
   );
 
-  const sceneIndex = playback.sceneIndex;
+  const undoBuild = useCallback(() => {
+    if (!undoRef.current) return;
+    project.setBoard(undoRef.current);
+    playback.load(undoRef.current);
+    undoRef.current = null;
+    setCanUndo(false);
+  }, [project.setBoard, playback.load]);
 
-  const generateBackdrop = useCallback(async () => {
-    const text = hfPrompt.trim() || storyboard?.scenes[sceneIndex]?.visualDescription || "";
-    if (!text) {
-      setHfStatus({ tone: "error", text: "Write a backdrop prompt first." });
-      return;
-    }
-    setIsHfGenerating(true);
-    setHfStatus(null);
-    try {
-      const res = await fetch("/api/generate-hf", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prompt: text, modelId: hfModel }),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data.error || "Image generation failed.");
-      if (!data.imageUrl) throw new Error("The server returned no image.");
-      setBackdrops((prev) => ({ ...prev, [sceneIndex]: data.imageUrl }));
-      setHfStatus(
-        data.isFallback
-          ? { tone: "warn", text: data.message || "A placeholder image was used." }
-          : { tone: "info", text: `Backdrop set for scene ${sceneIndex + 1}.` },
-      );
-    } catch (err: any) {
-      setHfStatus({ tone: "error", text: err?.message || "Image generation failed." });
-    } finally {
-      setIsHfGenerating(false);
-    }
-  }, [hfPrompt, hfModel, storyboard, sceneIndex]);
+  /** Recolour the current scenes with the selected style's palette, keeping everything else. */
+  const applyStyle = useCallback(() => {
+    undoRef.current = board;
+    setCanUndo(true);
+    project.setBoard(applyPalette(board, STYLE_PALETTES[style], style));
+  }, [board, style, project.setBoard]);
 
-  const clearBackdrop = useCallback(() => {
-    setBackdrops((prev) => {
-      const next = { ...prev };
-      delete next[sceneIndex];
-      return next;
+  const backdrops = useMemo(() => {
+    const out: Record<number, string> = {};
+    board.scenes.forEach((s, i) => {
+      if (s.backdrop && project.assets[s.backdrop]) out[i] = project.assets[s.backdrop];
     });
-    setHfStatus(null);
-  }, [sceneIndex]);
-
-  const startVeo = useCallback(() => {
-    if (!storyboard) return;
-    const scenes = storyboard.scenes.map((s) => s.visualDescription).join(" Then: ");
-    const text = `${promptRef.current}. ${scenes} Visual style: ${style}, cinematic lighting, smooth camera motion.`;
-    setVeoPrompt(text);
-    veo.start("/api/generate-video", { prompt: text, aspectRatio: "16:9", resolution: "720p" });
-  }, [storyboard, style, veo.start]);
+    return out;
+  }, [board.scenes, project.assets]);
 
   return {
-    prompt,
-    setPrompt,
+    ...project,
+    board,
+    playback,
     style,
     setStyle,
-    music,
-    setMusic,
-    storyboard,
-    setStoryboard,
-    history,
-    restore,
-    isGenerating,
-    generate,
-    generateError,
-    warning: warningDismissed ? undefined : storyboard?.warning,
-    dismissWarning: () => setWarningDismissed(true),
-    serverStatus,
-    playback,
+    mood,
+    setMood,
+    sceneCount,
+    setSceneCount,
+    build,
+    undoBuild,
+    canUndo,
+    applyStyle,
     backdrops,
-    hfPrompt,
-    setHfPrompt,
-    hfModel,
-    setHfModel,
-    isHfGenerating,
-    hfStatus,
-    generateBackdrop,
-    clearBackdrop,
-    veo,
-    veoPrompt,
-    startVeo,
   };
 }
 

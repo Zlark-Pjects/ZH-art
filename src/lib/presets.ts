@@ -27,21 +27,3 @@ export const SCALES = [
 ] as const;
 
 export type ScaleName = (typeof SCALES)[number]["value"];
-
-export const CAMERA_MOTIONS = [
-  { value: "zoom-in", label: "Slow push" },
-  { value: "pan-left", label: "Pan left" },
-  { value: "pan-right", label: "Pan right" },
-  { value: "tilt-up", label: "Tilt up" },
-  { value: "tilt-down", label: "Tilt down" },
-  { value: "orbit", label: "Orbit" },
-] as const;
-
-export const HF_MODELS = [
-  { value: "black-forest-labs/FLUX.1-schnell", label: "FLUX.1 schnell — fast" },
-  { value: "stabilityai/stable-diffusion-3.5-large", label: "Stable Diffusion 3.5 Large" },
-  { value: "stabilityai/stable-diffusion-xl-base-1.0", label: "Stable Diffusion XL" },
-  { value: "prompthero/openjourney", label: "OpenJourney" },
-];
-
-export const INITIAL_PROMPT = "Astronaut fishing for stars on a cosmic crescent moon";
