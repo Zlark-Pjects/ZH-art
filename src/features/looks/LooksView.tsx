@@ -7,6 +7,7 @@ import { MUSIC_PRESETS, VISUAL_PRESETS } from "../../lib/presets";
 import { Button, Chip, Notice, Section, StudioLayout, cx, inputClass } from "../../ui";
 import { FilmGate } from "../../ui/FilmGate";
 import { StoryboardStage } from "../storyboard/StoryboardStage";
+import { GradePanel } from "./GradePanel";
 
 /** Offline look library: preview a palette on the current scene, then apply it to the whole project. */
 export function LooksView({ studio, onNavigate }: { studio: Studio; onNavigate: (view: "storyboard") => void }) {
@@ -132,6 +133,7 @@ export function LooksView({ studio, onNavigate }: { studio: Studio; onNavigate: 
         )}
         <p className="text-xs leading-relaxed text-faint">Keeps your shapes, words, timing and cast; changes colour, particles and score.</p>
       </div>
+      <GradePanel studio={studio} />
     </div>
   );
 

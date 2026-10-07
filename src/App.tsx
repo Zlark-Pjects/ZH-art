@@ -101,13 +101,7 @@ export default function App() {
         <Suspense fallback={<p className="eyebrow py-24 text-center">Loading…</p>}>
           {panel(
             "characters",
-            <CharactersView
-              characters={studio.project.characters}
-              grade={studio.project.grade}
-              onSaveCharacter={studio.upsertCharacter}
-              onDeleteCharacter={studio.removeCharacter}
-              onApplyGrade={studio.setGrade}
-            />,
+            <CharactersView characters={studio.project.characters} onSaveCharacter={studio.upsertCharacter} />,
           )}
           {panel("rig", <MotionView studio={studio} />)}
           {panel("export", <ExportPanel studio={studio} />)}
@@ -138,8 +132,8 @@ function Guide({ onClose }: { onClose: () => void }) {
   const items = [
     ["Storyboard", "Write an idea and build, or open a sample film: the composer lays out scenes, colours, camera moves and a score. Then edit anything — words, palette, camera, shapes (drag them on the picture), particles, a backdrop photo, and cast."],
     ["Timeline", "Under the picture: drag scenes to reorder, drag their edges to trim, split at the playhead, and pick a transition between any two scenes. Add titles and captions on the text track. Add your own song on the music track; ZH-art finds its beat, so cuts snap to it, or press Cut on beat to line every cut up at once."],
-    ["Looks", "A library of colour and atmosphere. Preview one on the current scene, then apply it to every scene at once."],
-    ["Characters", "Forge whole characters from parts — bodies, heads, eyes, wings, tails, props — on two legs, four legs, wings, a serpent's coil or floating — or let the generator surprise you: pick an archetype, mutate, breed two designs, and lock what you like. Export any character as a game sprite sheet with idle, walk, run, jump and attack loops. The portrait studio handles faces and the film's colour grade."],
+    ["Looks", "A library of colour and atmosphere. Preview one on the current scene, then apply it to every scene at once. The film grade (contrast, saturation, vignette, tint) is here too and applies live."],
+    ["Characters", "Forge whole characters from parts — bodies, heads, eyes, wings, tails, props — on two legs, four legs, wings, a serpent's coil or floating — or let the generator surprise you: pick an archetype, mutate, breed two designs, and lock what you like. Export any character as a game sprite sheet with idle, walk, run, jump and attack loops."],
     ["Motion", "Pose your character by dragging its joints, then key poses over time: each key has its own timing and easing (smooth, ease in or out, overshoot, bounce, hold), with onion-skin ghosts of the keys either side. Layer a motion like a run or a float on top. Or capture a performance from your webcam or any video file, then trim, smooth and foot-lock the take. Tracking runs on your device; nothing is uploaded. Save clips to cast in any scene."],
     ["Export", "Record the finished film, with its transitions, text, song and score, to a video file — widescreen, vertical 9:16 or square."],
   ];

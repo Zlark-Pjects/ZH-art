@@ -177,7 +177,7 @@ export function StoryboardStage({
       {!thumbnail && titleCard && (scene.title || scene.narration) && (
         <div
           key={scene.sceneNumber + scene.title}
-          className="pointer-events-none absolute inset-x-0 bottom-[7%] bg-gradient-to-t from-black/75 via-black/35 to-transparent p-[4cqw] pb-[3.5cqw] pt-[8cqw]"
+          className="pointer-events-none absolute inset-x-0 bottom-[max(7%,1.75rem)] bg-gradient-to-t from-black/75 via-black/35 to-transparent p-[4cqw] pb-[3.5cqw] pt-[8cqw]"
         >
           <p className="font-mono text-[max(10px,1.05cqw)] uppercase tracking-[0.14em] text-fg/70">
             Scene {String(scene.sceneNumber).padStart(2, "0")}

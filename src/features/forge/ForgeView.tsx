@@ -326,7 +326,7 @@ export function ForgeView({
         </Section>
       )}
 
-      <Section index="·" title={editing ? `Editing ${editing.name}` : "Keep this one"}>
+      <Section title={editing ? `Editing ${editing.name}` : "Keep this one"}>
         <div className="flex flex-col gap-3">
           <Field label="Name" htmlFor="forge-name" hint={<button type="button" className="underline underline-offset-4 hover:text-fg" onClick={() => setName(nameFor({ ...build, seed: newSeed() }))}>Another name</button>}>
             <input id="forge-name" value={name} onChange={(e) => setName(e.target.value)} className={inputClass} />
