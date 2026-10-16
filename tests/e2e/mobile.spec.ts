@@ -16,15 +16,19 @@ test("tapping a scene on the timeline selects it", async ({ page }) => {
   await expect(sb.locator('[aria-label^="Scene 3:"]')).toHaveAttribute("aria-current", "step");
 });
 
-test("the game plays with the on-screen buttons", async ({ page }) => {
+test("the city plays with the on-screen joystick", async ({ page }) => {
   await fresh(page);
   const play = await openTab(page, "play");
   await play.getByRole("button", { name: "Start playing" }).tap();
-  const game = play.getByTestId("stickville");
-  await expect(game).toHaveAttribute("data-x", /\d+/);
-  const x0 = Number(await game.getAttribute("data-x"));
-  await play.getByRole("button", { name: "Right" }).dispatchEvent("pointerdown");
-  await page.waitForTimeout(800);
-  await play.getByRole("button", { name: "Right" }).dispatchEvent("pointerup");
-  await expect.poll(async () => Number(await game.getAttribute("data-x"))).toBeGreaterThan(x0 + 100);
+  const city = play.getByTestId("stickcity");
+  await expect(city).toHaveAttribute("data-x", /\d+/);
+  const x0 = Number(await city.getAttribute("data-x"));
+  const stick = play.getByRole("slider", { name: "Move" });
+  const b = (await stick.boundingBox())!;
+  await stick.dispatchEvent("pointerdown", { clientX: b.x + b.width / 2, clientY: b.y + b.height / 2, pointerId: 7 });
+  await stick.dispatchEvent("pointermove", { clientX: b.x + b.width / 2 + 45, clientY: b.y + b.height / 2, pointerId: 7 });
+  await expect.poll(async () => Number(await city.getAttribute("data-x"))).toBeGreaterThan(x0 + 100);
+  await stick.dispatchEvent("pointerup", { pointerId: 7 });
+  await play.getByRole("button", { name: "Phone" }).first().tap();
+  await expect(play.getByRole("dialog", { name: "Phone" })).toBeVisible();
 });

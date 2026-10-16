@@ -9,7 +9,7 @@
     "dev": "tsx server.ts",
     "build": "vite build && esbuild server.ts --bundle --platform=node --format=cjs --packages=external --sourcemap --outfile=dist/server.cjs",
     "build:stickville": "vite build --config vite.stickville.config.ts && node scripts/inline-stickville.mjs",
-    "art": "python3 blender/build_game_art.py",
+    "art": "python3 blender/build_city_art.py",
     "start": "node dist/server.cjs",
     "clean": "rm -rf dist server.js",
     "lint": "tsc --noEmit",

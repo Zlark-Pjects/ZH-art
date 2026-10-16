@@ -1,21 +1,22 @@
 """Stickville ↔ Blender.
 
-Turns Blender models into Stickville sprites. Three ways to use it:
+Turns Blender models into Stickville City sprites. Three ways to use it:
 
 1. As an add-on (Blender ≥ 4.2): Edit → Preferences → Add-ons → Install from Disk → pick this
    file. In the 3D view press N, open the "Stickville" tab, select your model and press
-   "Export for Stickville". You get a .stickpack.json file: in the game open Creator →
-   Import, and your model is in the item palette, ready to place in the world.
+   "Export for Stickville". You get a .stickpack.json file: in the game open the phone →
+   Builder → Import, and your model is in the palette, ready to place in the city.
 
 2. From the command line, for a whole .blend file (each top-level collection becomes an item):
        blender my_props.blend --background --python stickville_blender.py -- --out my_props.stickpack.json
 
-3. As a library: blender/build_game_art.py imports render_sprite() to render the game's own
+3. As a library: blender/build_city_art.py uses render_sprite() to render the game's own
    buildings, vehicles and props.
 
-Scale: 1 Blender unit = 1 metre = 38 game pixels (a stick figure is about 1.7 m tall).
-Models stand on the ground at Z = 0 and face +X (right). The object origin's X is the
-sprite's anchor, so centre your model on it.
+The camera matches the game's: orthographic, looking north and 50° down at the ground.
+Scale: 1 Blender unit = 1 metre = 24 game pixels. Models stand on the ground at Z = 0 with
+their front facing -Y (south, towards the camera). The object origin is the anchor: the point
+on the ground the game places at the item's position, so centre your model on it.
 """
 
 import base64
@@ -38,7 +39,9 @@ bl_info = {
     "category": "Import-Export",
 }
 
-PX_PER_M = 38
+PX_PER_M = 24
+PITCH = 50.0  # degrees the camera looks down
+YAW = 0.0
 SUPERSAMPLE = 2  # sprites are rendered at 2× so they stay sharp on high-density screens
 PACK_FORMAT = "stickville-pack"
 
@@ -74,7 +77,7 @@ def _setup_scene(scene, samples=48, outline=True):
         ls.select_crease = False
         ls.select_external_contour = True
         ls.linestyle.color = (0.11, 0.11, 0.14)
-        ls.linestyle.thickness = 1.1 * SUPERSAMPLE
+        ls.linestyle.thickness = 1.0 * SUPERSAMPLE
     world = scene.world or bpy.data.worlds.new("Stickville")
     scene.world = world
     world.use_nodes = True
@@ -84,9 +87,9 @@ def _setup_scene(scene, samples=48, outline=True):
         bg.inputs[1].default_value = 0.85
 
 
-def _ensure_rig(scene, yaw_deg=18.0, pitch_deg=8.0):
-    """An orthographic camera looking at the model's side, turned a little toward its front, and
-    a warm sun from the upper left."""
+def _ensure_rig(scene, yaw_deg=YAW, pitch_deg=PITCH):
+    """An orthographic camera looking north and down at the model, and a warm sun from the
+    upper left."""
     cam = scene.objects.get("StickvilleCam")
     if cam is None:
         cam = bpy.data.objects.new("StickvilleCam", bpy.data.cameras.new("StickvilleCam"))
@@ -129,12 +132,29 @@ def _camera_space_bounds(cam, objects):
     return min(xs), max(xs), min(ys), max(ys)
 
 
-def render_sprite(objects, filepath, samples=48, outline=True, margin_px=6, anchor=(0.0, 0.0, 0.0), only_visible=None):
+def _ground_footprint(objects):
+    """The objects' extent on the ground, in game pixels relative to the origin (y grows south)."""
+    xs, ys = [], []
+    deps = bpy.context.evaluated_depsgraph_get()
+    for ob in objects:
+        if ob.type not in {"MESH", "CURVE", "FONT", "SURFACE", "META"}:
+            continue
+        ev = ob.evaluated_get(deps)
+        mesh = ev.to_mesh()
+        for v in mesh.vertices:
+            p = ev.matrix_world @ v.co
+            xs.append(p.x)
+            ys.append(-p.y)
+        ev.to_mesh_clear()
+    return [round(min(xs) * PX_PER_M, 1), round(min(ys) * PX_PER_M, 1), round(max(xs) * PX_PER_M, 1), round(max(ys) * PX_PER_M, 1)]
+
+
+def render_sprite(objects, filepath, samples=48, outline=True, margin_px=4, anchor=(0.0, 0.0, 0.0), only_visible=None, supersample=SUPERSAMPLE):
     """Render `objects` to a transparent PNG at `filepath`.
 
-    Returns the sprite's size in game pixels and the game-pixel position, inside the sprite, of
-    the anchor point (ground under the origin by default): the game draws the sprite with that
-    point on the world position.
+    Returns the sprite's size in game pixels, the game-pixel position inside the sprite of the
+    anchor point (the origin by default; the game draws the sprite with that point on the item's
+    position), and `fp`, the footprint on the ground for collisions.
     """
     scene = bpy.context.scene
     _setup_scene(scene, samples=samples, outline=outline)
@@ -157,7 +177,7 @@ def render_sprite(objects, filepath, samples=48, outline=True, margin_px=6, anch
         y0 -= m
         y1 += m
         w_m, h_m = x1 - x0, y1 - y0
-        ppm = PX_PER_M * SUPERSAMPLE
+        ppm = PX_PER_M * supersample
         res_x = max(4, math.ceil(w_m * ppm))
         res_y = max(4, math.ceil(h_m * ppm))
         scene.render.resolution_x = res_x
@@ -174,7 +194,13 @@ def render_sprite(objects, filepath, samples=48, outline=True, margin_px=6, anch
         a = cam.matrix_world.inverted() @ Vector(anchor)
         ax = (a.x - x0) * PX_PER_M
         ay = (y1 - a.y) * PX_PER_M
-        return {"w": round(res_x / SUPERSAMPLE, 2), "h": round(res_y / SUPERSAMPLE, 2), "ax": round(ax, 2), "ay": round(ay, 2)}
+        return {
+            "w": round(res_x / supersample, 2),
+            "h": round(res_y / supersample, 2),
+            "ax": round(ax, 2),
+            "ay": round(ay, 2),
+            "fp": _ground_footprint(objects),
+        }
     finally:
         cam.data.shift_x = cam.data.shift_y = 0
         for ob, was in hidden:
@@ -188,7 +214,7 @@ def _data_url(path):
 
 def export_pack(items, out_path):
     """items: [(name, objects, solid)] → one .stickpack.json the game can import."""
-    pack = {"format": PACK_FORMAT, "version": 1, "items": []}
+    pack = {"format": PACK_FORMAT, "version": 2, "view": "city", "items": []}
     with tempfile.TemporaryDirectory() as tmp:
         for i, (name, objects, solid) in enumerate(items):
             png = os.path.join(tmp, f"{i}.png")

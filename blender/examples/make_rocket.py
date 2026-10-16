@@ -1,7 +1,7 @@
 """An example of the exporter: model a small rocket and save it as rocket.stickpack.json.
 
     python blender/examples/make_rocket.py        (or: blender --background --python ...)
-Then in Stickville: Create → Import → rocket.stickpack.json.
+Then in Stickville City: Builder → Import → rocket.stickpack.json.
 """
 import math
 import os
@@ -11,7 +11,7 @@ import bpy
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(HERE, ".."))
-import build_game_art as kit  # noqa: E402
+import kit  # noqa: E402
 from stickville_blender import export_pack  # noqa: E402
 
 bpy.ops.wm.read_factory_settings(use_empty=True)
