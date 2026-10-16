@@ -7,17 +7,22 @@ import { Button, cx, inputClass } from "../../ui";
 import { BOTTOMS, HAIR_STYLES, HEADWEAR, HERO_PRESETS, SKINS, STYLE_PRICES, type Hero, type Question } from "./data";
 import { drawHero } from "./stick";
 
-export function Overlay({ children, onClose, wide }: { children: ReactNode; onClose?: () => void; wide?: boolean }) {
+/** A modal card. `light` is a bright paper card with dark ink, for anything that's read closely (quizzes). */
+export function Overlay({ children, onClose, wide, light }: { children: ReactNode; onClose?: () => void; wide?: boolean; light?: boolean }) {
   return (
     <div className="absolute inset-0 z-20 flex items-end justify-center overflow-y-auto bg-black/55 backdrop-blur-[2px] sm:items-center sm:p-6" onClick={onClose}>
       <div
         role="dialog"
         aria-modal="true"
         onClick={(e) => e.stopPropagation()}
-        className={cx("relative max-h-full w-full animate-rise overflow-y-auto rounded-t-2xl border border-line bg-surface p-5 sm:max-h-[94%] sm:rounded-2xl sm:p-7", wide ? "max-w-3xl" : "max-w-xl")}
+        className={cx(
+          "relative max-h-full w-full animate-rise overflow-y-auto rounded-t-2xl border p-5 sm:max-h-[94%] sm:rounded-2xl sm:p-7",
+          light ? "border-[#e2dccb] bg-[#fbf8f1] text-[#1d1d24] shadow-2xl" : "border-line bg-surface",
+          wide ? "max-w-3xl" : "max-w-xl",
+        )}
       >
         {onClose && (
-          <button type="button" onClick={onClose} aria-label="Close" className="absolute right-4 top-4 text-muted hover:text-fg">
+          <button type="button" onClick={onClose} aria-label="Close" className={cx("absolute right-4 top-4", light ? "text-[#5a5650] hover:text-[#1d1d24]" : "text-muted hover:text-fg")}>
             <X className="h-5 w-5" />
           </button>
         )}
@@ -178,6 +183,13 @@ const shuffle = <T,>(a: T[]) => {
 };
 export { shuffle };
 
+/* Quizzes sit on a bright card with dark ink so they're easy to read on any screen. */
+const PAPER = {
+  eyebrow: "font-mono text-[12px] font-semibold uppercase tracking-[0.1em] text-[#a35a00]",
+  title: "mt-1 font-display text-3xl uppercase leading-none text-[#1d1d24] sm:text-4xl",
+  body: "text-[#3a3a42]",
+};
+
 export function Quiz({
   eyebrow,
   title,
@@ -203,12 +215,13 @@ export function Quiz({
   if (!q) {
     return (
       <div className="text-center">
-        <Heading eyebrow={eyebrow}>Done</Heading>
-        <p className="font-display text-6xl">
+        <p className={PAPER.eyebrow}>{eyebrow}</p>
+        <h3 className={PAPER.title}>Done</h3>
+        <p className="mt-4 font-display text-7xl text-[#1d1d24]">
           {score}/{questions.length}
         </p>
-        {payEach ? <p className="mt-2 text-[14px] text-muted">You earned ${score * payEach}.</p> : null}
-        <Button variant="primary" className="mt-6" onClick={() => onFinish(score)}>
+        {payEach ? <p className={cx("mt-2 text-[17px]", PAPER.body)}>You earned <b className="text-[#1e6b2c]">${score * payEach}</b>.</p> : null}
+        <Button variant="primary" size="lg" className="mt-6" onClick={() => onFinish(score)}>
           Back to the city
         </Button>
       </div>
@@ -221,12 +234,19 @@ export function Quiz({
     if (right) setScore((s) => s + 1);
     onAnswer(right);
   };
+  const letters = "ABCD";
   return (
     <div>
-      <Heading eyebrow={`${eyebrow}${single ? "" : ` · ${i + 1} of ${questions.length}`} · ${q.cat}`}>{title}</Heading>
-      <p className="text-[17px] leading-snug">{q.q}</p>
-      <div className="mt-4 grid gap-2 sm:grid-cols-2">
-        {order.map((k) => {
+      <div className="pr-8">
+        <p className={PAPER.eyebrow}>
+          {eyebrow}
+          {single ? "" : ` · ${i + 1} of ${questions.length}`} · {q.cat}
+        </p>
+        <h3 className={PAPER.title}>{title}</h3>
+      </div>
+      <p className="mt-5 text-[21px] font-semibold leading-snug text-[#1d1d24] sm:text-[23px]">{q.q}</p>
+      <div className="mt-5 grid gap-2.5 sm:grid-cols-2">
+        {order.map((k, n) => {
           const show = picked !== null;
           const right = k === q.answer;
           return (
@@ -236,36 +256,48 @@ export function Quiz({
               disabled={show}
               onClick={() => choose(k)}
               className={cx(
-                "rounded-xl border px-4 py-3 text-left text-[15px] transition-colors",
-                !show && "border-line-strong hover:border-accent hover:bg-accent/[0.06]",
-                show && right && "border-ok bg-ok/10 text-ok",
-                show && !right && k === picked && "border-danger bg-danger/10 text-danger",
-                show && !right && k !== picked && "border-line opacity-50",
+                "flex items-center gap-3 rounded-xl border-2 px-4 py-3.5 text-left text-[17px] font-medium transition-colors",
+                !show && "border-[#d6cfbd] bg-white text-[#1d1d24] hover:border-[#e89a00] hover:bg-[#fff4dc]",
+                show && right && "border-[#2f8a3e] bg-[#e1f5e4] text-[#16501f]",
+                show && !right && k === picked && "border-[#c8382c] bg-[#fde3df] text-[#7d1c13]",
+                show && !right && k !== picked && "border-[#e2dccb] bg-white text-[#5a5650]",
               )}
             >
+              <span
+                aria-hidden
+                className={cx(
+                  "flex h-7 w-7 shrink-0 items-center justify-center rounded-full font-mono text-[13px] font-bold",
+                  show && right ? "bg-[#2f8a3e] text-white" : show && k === picked ? "bg-[#c8382c] text-white" : "bg-[#efe8d6] text-[#5a5650]",
+                )}
+              >
+                {show && right ? "✓" : show && k === picked ? "✗" : letters[n]}
+              </span>
               {q.options[k]}
             </button>
           );
         })}
       </div>
       {picked !== null && (
-        <div className="mt-4" role="status">
-          <p className={cx("text-[15px] font-medium", picked === q.answer ? "text-ok" : "text-danger")}>{picked === q.answer ? `Correct!${payEach ? ` +$${payEach}` : ""}` : "Not quite."}</p>
-          {q.why && <p className="mt-1 text-[14px] leading-relaxed text-muted">{q.why}</p>}
-          <div className="mt-4 flex justify-end">
-            <Button
-              variant="primary"
-              onClick={() => {
-                if (single) onFinish(picked === q.answer ? 1 : 0);
-                else {
-                  setI(i + 1);
-                  setPicked(null);
-                }
-              }}
-            >
-              {single ? "Continue" : i + 1 < questions.length ? "Next question" : "See score"}
-            </Button>
-          </div>
+        <div className="mt-5 rounded-xl bg-white p-4 ring-1 ring-[#e2dccb]" role="status">
+          <p className={cx("text-[18px] font-bold", picked === q.answer ? "text-[#1e6b2c]" : "text-[#a3271c]")}>{picked === q.answer ? `Correct!${payEach ? ` +$${payEach}` : ""}` : `Not quite — it's ${q.options[q.answer]}.`}</p>
+          {q.why && <p className="mt-1.5 text-[16px] leading-relaxed text-[#3a3a42]">{q.why}</p>}
+        </div>
+      )}
+      {picked !== null && (
+        <div className="mt-4 flex justify-end">
+          <Button
+            variant="primary"
+            size="lg"
+            onClick={() => {
+              if (single) onFinish(picked === q.answer ? 1 : 0);
+              else {
+                setI(i + 1);
+                setPicked(null);
+              }
+            }}
+          >
+            {single ? "Continue" : i + 1 < questions.length ? "Next question" : "See score"}
+          </Button>
         </div>
       )}
     </div>

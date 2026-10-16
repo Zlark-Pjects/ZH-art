@@ -434,7 +434,7 @@ export function CityView({ active }: { active: boolean }) {
           </div>
         )}
         {modal && (
-          <Overlay onClose={modal.type === "hero" && modal.mode === "new" ? undefined : close} wide={modal.type === "hero"}>
+          <Overlay onClose={modal.type === "hero" && modal.mode === "new" ? undefined : close} wide={modal.type === "hero"} light={modal.type === "quiz" || modal.type === "riddle" || modal.type === "terminal"}>
             {modal.type === "hero" && (
               <HeroEditor
                 initial={game.save.hero}
