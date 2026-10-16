@@ -3,6 +3,8 @@
 
 import { BUILDINGS, FACTS, MISSIONS, VEHICLES, rankOf, type BuildingKind, type Hero, type MissionDef, type VehicleKind } from "./data";
 import { engineHum, sfx } from "./audio";
+import { PROP_DEFS, propBounds, propDef, type Pack, type Prop } from "./creator";
+import type { Question } from "./data";
 import {
   DEPOT_X,
   OUTPOST_X,
@@ -41,6 +43,13 @@ export interface SaveData {
   bestRace: number | null;
   quizRight: number;
   flips: number;
+  /** Creator mode: everything the player placed in the world. */
+  props: Prop[];
+  /** Sprites the player imported (Blender add-on packs or PNGs). */
+  packs: Pack[];
+  /** Quiz questions the player wrote; they join the school's pool. */
+  myQuestions: Question[];
+  nextPropId: number;
 }
 
 export const newSave = (): SaveData => ({
@@ -55,7 +64,20 @@ export const newSave = (): SaveData => ({
   bestRace: null,
   quizRight: 0,
   flips: 0,
+  props: [],
+  packs: [],
+  myQuestions: [],
+  nextPropId: 1,
 });
+
+export const MAX_PROPS = 500;
+
+interface Surface {
+  x0: number;
+  x1: number;
+  top: number;
+  kind: "solid" | "trampoline";
+}
 
 export interface Vehicle {
   kind: VehicleKind;
@@ -208,12 +230,26 @@ export class Game {
   cam = { x: SPAWN_X, y: -150 };
   prompt: { text: string; act: () => void } | null = null;
   shake = 0;
+  /* Creator mode */
+  creator = false;
+  selected: number | null = null;
+  ghost: { x: number; y: number; kind: string } | null = null;
+  camOffset = { x: 0, y: 0 };
+  /** Where the last frame's camera was, so the page can map pointer positions into the world. */
+  view = { camX: 0, camY: 0, scale: 1, w: 1, h: 1 };
+  surfaces: Surface[] = [];
+  propCoinWait = new Map<number, number>();
+  course: { t: number; from: number } | null = null;
+  boostT = 0;
+  /** The sign or person currently talking, by prop id. */
+  talking: number | null = null;
   private emit: (e: GameEvent) => void;
 
   constructor(save: SaveData, emit: (e: GameEvent) => void) {
     this.save = save;
     this.emit = emit;
-    this.terrain = new Terrain(save.ramps);
+    this.terrain = new Terrain(this.allRamps());
+    this.refreshSurfaces();
     this.player = { x: SPAWN_X, y: 0, vx: 0, vy: 0, grounded: true, facing: 1, phase: 0, hp: MAX_HP, vehicle: null, hurtT: 0, fireT: 0, downT: 0 };
     save.plots.forEach((k, i) => k && this.built.set(i, 1));
     this.syncVehicles();
@@ -318,10 +354,208 @@ export class Game {
     if (!this.spend(RAMP_COST)) return this.toast(`A ramp costs ${RAMP_COST} coins`, "#ff5a4e");
     const ramp: Ramp = { x: Math.min(WORLD_W - 200, p.x + p.facing * 180), w: 150, h: 60, dir: p.facing };
     this.save.ramps.push(ramp);
-    this.terrain = new Terrain(this.save.ramps);
+    this.refreshProps();
     sfx.build();
     this.toast("Ramp built! Hit it fast.", "#ffb224");
     this.emit({ type: "save" });
+  }
+
+  /* ---------- Creator ---------- */
+
+  private allRamps(): Ramp[] {
+    const placed = (this.save.props ?? []).filter((p) => p.kind === "ramp").map((p) => ({ x: p.x, w: 150, h: 60, dir: p.dir ?? 1 }) as Ramp);
+    return [...this.save.ramps, ...placed];
+  }
+
+  private refreshSurfaces() {
+    const ground = (x: number) => this.terrain.y(x);
+    this.surfaces = [];
+    for (const p of this.save.props) {
+      const def = propDef(p.kind, this.save.packs);
+      if (!def?.solid) continue;
+      const b = propBounds(p, this.save.packs, ground);
+      this.surfaces.push({ x0: b.x0 + 4, x1: b.x1 - 4, top: b.top, kind: p.kind === "trampoline" ? "trampoline" : "solid" });
+    }
+  }
+
+  /** Rebuild terrain and platforms after props change, and save. */
+  refreshProps() {
+    this.terrain = new Terrain(this.allRamps());
+    this.refreshSurfaces();
+    this.emit({ type: "save" });
+  }
+
+  /** The ground under (x, y): terrain, or the top of a platform at most a step above y. */
+  floorAt(x: number, y: number, rising = false) {
+    let gy = this.terrain.y(x);
+    let slope: number | null = null;
+    let trampoline = false;
+    if (!rising) {
+      for (const s of this.surfaces) {
+        if (x >= s.x0 && x <= s.x1 && s.top >= y - 18 && s.top < gy) {
+          gy = s.top;
+          slope = 0;
+          trampoline = s.kind === "trampoline";
+        }
+      }
+    }
+    return { y: gy, slope: slope ?? this.terrain.slope(x), trampoline };
+  }
+
+  /** Where a prop of this kind would sit if placed at (x, y). */
+  placement(kind: string, x: number, y: number) {
+    const def = propDef(kind, this.save.packs);
+    const gx = Math.round(Math.max(40, Math.min(WORLD_W - 40, x)) / 10) * 10;
+    if (!def) return { x: gx, y };
+    if (!def.grounded) return { x: gx, y: Math.round((kind === "block" ? y + (def.h ?? 40) / 2 : y) / 10) * 10 };
+    return { x: gx, y: this.floorAt(gx, y - 10).y };
+  }
+
+  addProp(kind: string, x: number, y: number) {
+    const def = propDef(kind, this.save.packs);
+    if (!def) return null;
+    if (this.save.props.length >= MAX_PROPS) {
+      this.toast(`That's the limit of ${MAX_PROPS} items — delete some first`, "#ff5a4e");
+      return null;
+    }
+    const at = this.placement(kind, x, y);
+    const p: Prop = { id: this.save.nextPropId++, kind, x: at.x, y: at.y };
+    if (def.w && kind === "block") p.w = def.w;
+    if (def.h && kind === "block") p.h = def.h;
+    if (def.color) p.color = def.color;
+    if (def.text) p.text = def.text;
+    this.save.props.push(p);
+    this.selected = p.id;
+    sfx.build();
+    this.burst(p.x, p.y - 10, "#ffb224", 8, 120);
+    this.refreshProps();
+    return p;
+  }
+
+  propAt(x: number, y: number) {
+    const ground = (gx: number) => this.terrain.y(gx);
+    for (let i = this.save.props.length - 1; i >= 0; i--) {
+      const p = this.save.props[i];
+      const b = propBounds(p, this.save.packs, ground);
+      if (x >= b.x0 - 6 && x <= b.x1 + 6 && y >= b.y0 - 6 && y <= b.y1 + 6) return p;
+    }
+    return null;
+  }
+
+  moveProp(id: number, x: number, y: number) {
+    const p = this.save.props.find((q) => q.id === id);
+    if (!p) return;
+    const at = this.placement(p.kind, x, y);
+    p.x = at.x;
+    p.y = at.y;
+    this.refreshSurfaces();
+    if (p.kind === "ramp") this.terrain = new Terrain(this.allRamps());
+  }
+
+  updateProp(id: number, patch: Partial<Prop>) {
+    const p = this.save.props.find((q) => q.id === id);
+    if (!p) return;
+    Object.assign(p, patch);
+    this.refreshProps();
+  }
+
+  removeProp(id: number) {
+    this.save.props = this.save.props.filter((p) => p.id !== id);
+    if (this.selected === id) this.selected = null;
+    this.refreshProps();
+  }
+
+  duplicateProp(id: number) {
+    const p = this.save.props.find((q) => q.id === id);
+    if (!p || this.save.props.length >= MAX_PROPS) return;
+    const b = propBounds(p, this.save.packs, (x) => this.terrain.y(x));
+    const copy: Prop = { ...p, id: this.save.nextPropId++, x: Math.min(WORLD_W - 40, p.x + (b.x1 - b.x0) + 10), best: undefined };
+    if (!PROP_DEFS[p.kind]?.grounded || p.kind === "block") copy.y = p.y;
+    else copy.y = this.floorAt(copy.x, p.y - 10).y;
+    this.save.props.push(copy);
+    this.selected = copy.id;
+    this.refreshProps();
+  }
+
+  private updateProps(dt: number) {
+    const f = this.focus();
+    const p = this.player;
+    const v = p.vehicle;
+    const ground = (x: number) => this.terrain.y(x);
+    this.boostT = Math.max(0, this.boostT - dt);
+    for (const [id, w] of this.propCoinWait) {
+      if (w - dt <= 0) this.propCoinWait.delete(id);
+      else this.propCoinWait.set(id, w - dt);
+    }
+    let talking: number | null = null;
+    let talkD = 150;
+    const prevX = f.x - f.vx * dt;
+    for (const q of this.save.props) {
+      if (Math.abs(q.x - f.x) > 220) continue;
+      switch (q.kind) {
+        case "coin":
+          if (!this.propCoinWait.has(q.id) && Math.abs(q.x - f.x) < 34 && Math.abs(q.y - (f.y - 40)) < 52) {
+            this.propCoinWait.set(q.id, 60);
+            this.save.coins += 2;
+            sfx.coin();
+          }
+          break;
+        case "boost": {
+          const b = propBounds(q, this.save.packs, ground);
+          if (f.x >= b.x0 && f.x <= b.x1 && Math.abs(f.y - b.top) < 22 && this.boostT < 0.8) {
+            this.boostT = 1.2;
+            sfx.flip();
+            if (v) v.vx = v.dir * VEHICLES[v.kind].max * 1.45;
+            else p.vx = p.facing * WALK * 2.6;
+            this.burst(f.x, f.y - 10, "#ffb224", 12, 200);
+          }
+          break;
+        }
+        case "start":
+          if (prevX < q.x + 40 && f.x >= q.x + 40 && Math.abs(f.y - q.y) < 200) {
+            this.course = { t: 0, from: q.id };
+            this.toast("Course started! Reach a finish line", "#ffb224");
+            sfx.right();
+          }
+          break;
+        case "finish":
+          if (this.course && prevX < q.x + 40 && f.x >= q.x + 40 && Math.abs(f.y - q.y) < 200) {
+            const t = this.course.t;
+            this.course = null;
+            const record = !q.best || t < q.best;
+            if (record) q.best = t;
+            this.reward(5, 5, `${record ? "New best! " : ""}Course: ${t.toFixed(2)} s`);
+            sfx.success();
+            this.confetti(f.x, f.y - 80);
+          }
+          break;
+        case "sign":
+        case "person": {
+          const d = Math.abs(q.x - f.x);
+          if (d < talkD && Math.abs(q.y - f.y) < 160) {
+            talkD = d;
+            talking = q.id;
+          }
+          break;
+        }
+      }
+    }
+    if (talking !== null && talking !== this.talking) sfx.page();
+    this.talking = talking;
+    if (this.course) {
+      this.course.t += dt;
+      const start = this.save.props.find((q) => q.id === this.course!.from);
+      if (!start || f.x < start.x - 200) {
+        this.course = null;
+        this.toast("Course cancelled", "#8e8b84");
+      }
+    }
+    // The pan offset fades once the hero moves, so you never lose them
+    if (this.input.left || this.input.right) {
+      const k = Math.exp(-dt * 3);
+      this.camOffset.x *= k;
+      this.camOffset.y *= k;
+    }
   }
 
   /* ---------- Missions ---------- */
@@ -527,7 +761,7 @@ export class Game {
     // Prompt for whatever is in reach; E acts on it
     this.prompt = this.findPrompt();
     if (pressed.has("action") && this.prompt && p.downT <= 0) this.prompt.act();
-    if (pressed.has("ramp")) this.placeRamp();
+    if (pressed.has("ramp") && !this.creator) this.placeRamp();
     if (pressed.has("home")) this.goHome();
 
     if (p.downT > 0) {
@@ -543,6 +777,7 @@ export class Game {
     if ((this.input.fire || pressed.has("fire")) && p.fireT <= 0 && p.downT <= 0) this.fire();
 
     this.updateWorldPickups(dt);
+    this.updateProps(dt);
     this.updateMission(dt);
     this.updateDrones(dt);
     this.updateShots(dt);
@@ -674,21 +909,28 @@ export class Game {
     const t = this.terrain;
     const dir = (inp.right ? 1 : 0) - (inp.left ? 1 : 0);
     if (dir) p.facing = dir as 1 | -1;
-    p.vx = approach(p.vx, dir * WALK, (p.grounded ? 2600 : 1400) * dt);
+    if (this.boostT <= 0 || Math.abs(p.vx) <= WALK) p.vx = approach(p.vx, dir * WALK, (p.grounded ? 2600 : 1400) * dt);
     if (inp.pressed.has("jump") && p.grounded) {
       p.vy = -JUMP;
       p.grounded = false;
       sfx.jump();
     }
     p.vy += G * dt;
+    const y0 = p.y;
     p.x = Math.max(20, Math.min(WORLD_W - 20, p.x + p.vx * dt));
     p.y += p.vy * dt;
-    const gy = t.y(p.x);
+    const floor = this.floorAt(p.x, y0, p.vy < 0);
+    const gy = floor.y;
     if (p.y >= gy || (p.grounded && p.vy >= 0 && gy - p.y < 16)) {
       if (!p.grounded && p.vy > 900) this.burst(p.x, gy, "#c9b28a", 8, 120);
       p.y = gy;
       p.vy = 0;
       p.grounded = true;
+      if (floor.trampoline) {
+        p.vy = -1180;
+        p.grounded = false;
+        sfx.jump();
+      }
     } else p.grounded = false;
     p.phase += Math.abs(p.vx) * dt * 0.045;
     if (p.grounded && Math.abs(p.vx) > 50 && Math.random() < dt * 6) this.particles.push(this.dust(p.x, gy, "rgba(200,180,140,0.6)"));
@@ -705,8 +947,9 @@ export class Game {
       v.crashT -= dt;
       v.vx *= 1 - 3 * dt;
       if (v.crashT <= 0) {
-        v.angle = Math.atan(t.slope(v.x));
-        v.y = t.y(v.x);
+        const fl = this.floorAt(v.x, v.y);
+        v.angle = Math.atan(fl.slope);
+        v.y = fl.y;
         v.grounded = true;
       }
       return;
@@ -718,21 +961,23 @@ export class Game {
       v.vy = approach(v.vy, climb * 420 + (climb === 0 ? 30 : 0), 800 * dt);
       if (throttle) v.dir = throttle as 1 | -1;
       v.x = Math.max(60, Math.min(WORLD_W - 60, v.x + v.vx * dt));
+      const hy0 = v.y;
       v.y = Math.max(-1100, v.y + v.vy * dt);
-      const gy = t.y(v.x);
+      const hf = this.floorAt(v.x, hy0, v.vy < 0);
+      const gy = hf.y;
       if (v.y >= gy) {
         v.y = gy;
         v.vy = Math.min(0, v.vy);
         v.grounded = true;
         v.vx *= 1 - 4 * dt;
       } else v.grounded = false;
-      v.angle += ((v.grounded ? Math.atan(t.slope(v.x)) : (v.vx / def.max) * 0.25) - v.angle) * Math.min(1, dt * 6);
+      v.angle += ((v.grounded ? Math.atan(hf.slope) : (v.vx / def.max) * 0.25) - v.angle) * Math.min(1, dt * 6);
       v.wheel += dt * (v.grounded && Math.abs(v.vy) < 1 && !throttle ? 14 : 40);
       return;
     }
 
     if (v.grounded) {
-      const s = t.slope(v.x);
+      const s = this.floorAt(v.x, v.y).slope;
       const th = Math.atan(s);
       if (throttle) {
         const braking = Math.sign(v.vx) !== throttle && Math.abs(v.vx) > 40;
@@ -740,7 +985,8 @@ export class Game {
         if (Math.abs(v.vx) < 120 || !braking) v.dir = throttle as 1 | -1;
       } else v.vx *= 1 - 1.1 * dt;
       v.vx += G * Math.sin(th) * Math.cos(th) * 0.8 * dt;
-      v.vx = Math.max(-def.max, Math.min(def.max, v.vx));
+      const cap = def.max * (this.boostT > 0 ? 1.45 : 1);
+      v.vx = Math.max(-cap, Math.min(cap, v.vx));
       v.vy = s * v.vx;
       v.angle += (th - v.angle) * Math.min(1, dt * 14);
       if (Math.abs(v.vx) > 200 && Math.random() < dt * 10) this.particles.push(this.dust(v.x - v.dir * 30, v.y, "rgba(200,180,140,0.6)"));
@@ -751,16 +997,24 @@ export class Game {
       v.airRot += spin;
     }
 
+    const vy0 = v.y;
     v.x = Math.max(60, Math.min(WORLD_W - 60, v.x + v.vx * dt));
     if (v.x <= 60 || v.x >= WORLD_W - 60) v.vx = 0;
     v.y += v.vy * dt;
     v.wheel += (v.vx * dt) / 14;
-    const gy = t.y(v.x);
+    const vf = this.floorAt(v.x, vy0, v.vy < -60);
+    const gy = vf.y;
     if (v.y >= gy || (v.grounded && gy - v.y < 7)) {
-      if (!v.grounded) this.land(v);
+      if (!v.grounded) this.land(v, vf.y, vf.slope);
       if (v.crashT <= 0) {
         v.y = gy;
         v.grounded = true;
+        if (vf.trampoline) {
+          v.vy = -1150;
+          v.grounded = false;
+          v.airRot = 0;
+          sfx.jump();
+        }
       }
     } else {
       if (v.grounded) v.airRot = 0;
@@ -768,13 +1022,12 @@ export class Game {
     }
   }
 
-  private land(v: Vehicle) {
-    const t = this.terrain;
-    const target = Math.atan(t.slope(v.x));
+  private land(v: Vehicle, floorY: number, slope: number) {
+    const target = Math.atan(slope);
     const diff = wrap(v.angle - target);
     const tolerance = v.kind === "bike" ? 1.0 : 1.4;
     const p = this.player;
-    v.y = t.y(v.x);
+    v.y = floorY;
     if (Math.abs(diff) > tolerance) {
       v.crashT = 1.1;
       v.vx *= 0.2;
@@ -802,9 +1055,9 @@ export class Game {
   }
 
   private idleVehicle(v: Vehicle, dt: number) {
-    const t = this.terrain;
     v.crashT = 0;
-    const gy = t.y(v.x);
+    const fl = this.floorAt(v.x, v.y);
+    const gy = fl.y;
     if (v.y < gy - 1) {
       v.vy += G * dt;
       v.y = Math.min(gy, v.y + v.vy * dt);
@@ -816,7 +1069,7 @@ export class Game {
       v.vx *= 1 - 3 * dt;
       v.x += v.vx * dt;
       v.grounded = true;
-      v.angle += (Math.atan(t.slope(v.x)) - v.angle) * Math.min(1, dt * 8);
+      v.angle += (Math.atan(fl.slope) - v.angle) * Math.min(1, dt * 8);
     }
   }
 

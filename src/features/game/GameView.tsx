@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, BookOpen, Crosshair, HelpCircle, Home, Maximize2, UserRound, Volume2, VolumeX, X } from "lucide-react";
+import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, BookOpen, Box, Crosshair, Hammer, HelpCircle, Home, Maximize2, PenLine, UserRound, Volume2, VolumeX, X } from "lucide-react";
 import { Button, cx, inputClass } from "../../ui";
 import {
   BOTTOMS,
@@ -20,9 +20,12 @@ import {
 import { Game, MAX_USER_RAMPS, RAMP_COST, newSave, type GameEvent, type SaveData } from "./engine";
 import { drawHero, render } from "./render";
 import { setMuted } from "./audio";
+import { setArtEnabled } from "./art";
+import { CreatorPanel, QuizMaker, WorldDialog } from "./CreatorPanel";
 
 const SAVE_KEY = "zh-art:stickville";
 const MUTE_KEY = "zh-art:stickville-muted";
+const ART_KEY = "zh-art:stickville-art";
 
 function loadSave(): SaveData {
   try {
@@ -40,9 +43,17 @@ function loadSave(): SaveData {
 function persist(s: SaveData) {
   try {
     localStorage.setItem(SAVE_KEY, JSON.stringify(s));
+    return true;
   } catch {
     /* storage full or blocked: the game still plays */
+    return false;
   }
+}
+
+/** School quizzes mix in up to two of the player's own questions. */
+function quizSet(save: SaveData, n: number) {
+  const mine = shuffle(save.myQuestions).slice(0, Math.min(2, n));
+  return shuffle([...mine, ...shuffle(QUESTIONS).slice(0, n - mine.length)]);
 }
 
 const shuffle = <T,>(a: T[]) => {
@@ -62,7 +73,9 @@ type Modal =
   | { type: "quiz"; questions: Question[]; terminal?: number }
   | { type: "journal" }
   | { type: "help" }
-  | { type: "mission-end"; ok: boolean; title: string; text: string };
+  | { type: "mission-end"; ok: boolean; title: string; text: string }
+  | { type: "world" }
+  | { type: "quiz-maker" };
 
 export function GameView({ active }: { active: boolean }) {
   const wrapRef = useRef<HTMLDivElement>(null);
@@ -79,13 +92,26 @@ export function GameView({ active }: { active: boolean }) {
     }
   });
   const refresh = useCallback(() => setTick((t) => t + 1), []);
+  const [creating, setCreating] = useState(false);
+  const [tool, setTool] = useState<string | null>(null);
+  const [art3d, setArt3d] = useState(() => {
+    try {
+      return localStorage.getItem(ART_KEY) !== "drawn";
+    } catch {
+      return true;
+    }
+  });
+  const storageWarned = useRef(0);
 
   const onEvent = useCallback((e: GameEvent) => {
     const g = gameRef.current;
     if (!g) return;
     switch (e.type) {
       case "save":
-        persist(g.save);
+        if (!persist(g.save) && performance.now() - storageWarned.current > 15000) {
+          storageWarned.current = performance.now();
+          g.toast("Can't save: browser storage is full. Remove some imports.", "#ff5a4e");
+        }
         break;
       case "build":
         setModal({ type: "build", plot: e.plot });
@@ -98,10 +124,10 @@ export function GameView({ active }: { active: boolean }) {
         setModal({ type: "missions" });
         break;
       case "school":
-        setModal({ type: "quiz", questions: shuffle(QUESTIONS).slice(0, 5) });
+        setModal({ type: "quiz", questions: quizSet(g.save, 5) });
         break;
       case "intel":
-        setModal({ type: "quiz", questions: shuffle(QUESTIONS).slice(0, 1), terminal: e.terminal });
+        setModal({ type: "quiz", questions: quizSet(g.save, 1), terminal: e.terminal });
         break;
       case "fact":
         setFact(e.index);
@@ -122,6 +148,66 @@ export function GameView({ active }: { active: boolean }) {
   }, [game]);
 
   useEffect(() => setMuted(muted), [muted]);
+
+  useEffect(() => {
+    setArtEnabled(art3d);
+    try {
+      localStorage.setItem(ART_KEY, art3d ? "3d" : "drawn");
+    } catch {
+      /* ignore */
+    }
+  }, [art3d]);
+
+  // Creator mode: the world keeps running so you can test what you build straight away
+  useEffect(() => {
+    game.creator = creating;
+    if (!creating) {
+      game.ghost = null;
+      game.selected = null;
+      game.camOffset = { x: 0, y: 0 };
+      setTool(null);
+    } else if (!game.save.props.length) game.toast("Creator: pick an item below, then click the world to place it", "#ffb224");
+  }, [creating, game]);
+
+  // Pointer → world, using the camera the last frame was drawn with
+  const drag = useRef<{ id?: number; dx: number; dy: number; sx: number; sy: number; ox: number; oy: number } | null>(null);
+  const toWorld = (e: React.PointerEvent) => {
+    const r = canvasRef.current!.getBoundingClientRect();
+    const v = game.view;
+    return { x: v.camX + (e.clientX - r.left - r.width / 2) / v.scale, y: v.camY + (e.clientY - r.top - r.height / 2) / v.scale, sx: e.clientX, sy: e.clientY };
+  };
+  const onPointerDown = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    if (!creating || modal) return;
+    e.currentTarget.setPointerCapture?.(e.pointerId);
+    const w = toWorld(e);
+    const hit = game.propAt(w.x, w.y);
+    if (hit && (!tool || hit.id === game.selected)) {
+      game.selected = hit.id;
+      drag.current = { id: hit.id, dx: hit.x - w.x, dy: hit.y - w.y, sx: w.sx, sy: w.sy, ox: 0, oy: 0 };
+    } else if (tool) {
+      game.addProp(tool, w.x, w.y);
+    } else {
+      game.selected = null;
+      drag.current = { dx: 0, dy: 0, sx: w.sx, sy: w.sy, ox: game.camOffset.x, oy: game.camOffset.y };
+    }
+    refresh();
+  };
+  const onPointerMove = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    if (!creating) return;
+    const w = toWorld(e);
+    game.ghost = tool && !drag.current ? { ...game.placement(tool, w.x, w.y), kind: tool } : null;
+    const d = drag.current;
+    if (!d) return;
+    if (d.id !== undefined) game.moveProp(d.id, w.x + d.dx, w.y + d.dy);
+    else {
+      const sc = game.view.scale;
+      game.camOffset = { x: d.ox - (w.sx - d.sx) / sc, y: Math.max(-1400, Math.min(400, d.oy - (w.sy - d.sy) / sc)) };
+    }
+  };
+  const onPointerUp = () => {
+    if (drag.current?.id !== undefined) game.refreshProps();
+    drag.current = null;
+  };
 
   // Pause whenever a menu is open, the tab is hidden or the page is in the background
   useEffect(() => {
@@ -156,6 +242,8 @@ export function GameView({ active }: { active: boolean }) {
         const d = wrapRef.current.dataset;
         d.coins = String(game.save.coins);
         d.x = String(Math.round(game.focus().x));
+        d.y = String(Math.round(game.focus().y));
+        d.props = String(game.save.props.length);
         d.vehicle = game.player.vehicle?.kind ?? "";
         d.mission = game.mission?.def.id ?? "";
       }
@@ -194,6 +282,18 @@ export function GameView({ active }: { active: boolean }) {
         return;
       }
       if (typing(e) || e.metaKey || e.ctrlKey || e.altKey) return;
+      if (game.creator && (e.key === "Delete" || e.key === "Backspace") && game.selected !== null) {
+        game.removeProp(game.selected);
+        refresh();
+        e.preventDefault();
+        return;
+      }
+      if (game.creator && e.key === "Escape") {
+        setTool(null);
+        game.selected = null;
+        refresh();
+        return;
+      }
       const inp = game.input;
       const k = map[e.code];
       if (k) inp[k] = true;
@@ -221,7 +321,7 @@ export function GameView({ active }: { active: boolean }) {
       window.removeEventListener("blur", blur);
       blur();
     };
-  }, [active, modal, game]);
+  }, [active, modal, game, refresh]);
 
   const close = () => {
     setModal(null);
@@ -259,6 +359,9 @@ export function GameView({ active }: { active: boolean }) {
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
+          <Button size="sm" variant={creating ? "primary" : "secondary"} aria-pressed={creating} icon={<Hammer className="h-4 w-4" />} onClick={() => setCreating((c) => !c)}>
+            Create
+          </Button>
           <Button size="sm" icon={<UserRound className="h-4 w-4" />} onClick={() => setModal({ type: "creator" })}>
             Character
           </Button>
@@ -267,6 +370,16 @@ export function GameView({ active }: { active: boolean }) {
           </Button>
           <Button size="sm" icon={<HelpCircle className="h-4 w-4" />} onClick={() => setModal({ type: "help" })}>
             How to play
+          </Button>
+          <Button
+            size="sm"
+            variant="ghost"
+            aria-pressed={art3d}
+            title={art3d ? "3D art rendered in Blender (click for hand-drawn)" : "Hand-drawn art (click for 3D)"}
+            icon={art3d ? <Box className="h-4 w-4" /> : <PenLine className="h-4 w-4" />}
+            onClick={() => setArt3d((a) => !a)}
+          >
+            {art3d ? "3D art" : "Drawn art"}
           </Button>
           <Button size="sm" variant="ghost" aria-label={muted ? "Sound on" : "Mute"} icon={muted ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />} onClick={toggleMute} />
           <Button size="sm" variant="ghost" aria-label="Full screen" icon={<Maximize2 className="h-4 w-4" />} onClick={fullscreen} />
@@ -282,7 +395,15 @@ export function GameView({ active }: { active: boolean }) {
           ref={canvasRef}
           role="img"
           aria-label={`Stickville game. ${game.save.hero?.name ?? "Hero"}, ${rank.name}, ${game.save.coins} coins.`}
-          className="block aspect-[4/5] w-full touch-none select-none sm:aspect-video [:fullscreen_&]:h-screen [:fullscreen_&]:aspect-auto"
+          className={cx(
+            "block aspect-[4/5] w-full touch-none select-none sm:aspect-video [:fullscreen_&]:h-screen [:fullscreen_&]:aspect-auto",
+            creating && (tool ? "cursor-crosshair" : "cursor-grab"),
+          )}
+          onPointerDown={onPointerDown}
+          onPointerMove={onPointerMove}
+          onPointerUp={onPointerUp}
+          onPointerCancel={onPointerUp}
+          onPointerLeave={() => (game.ghost = null)}
         />
         <TouchControls game={game} hidden={!!modal} />
         {fact !== null && <FactCard index={fact} onDone={() => setFact(null)} />}
@@ -314,6 +435,8 @@ export function GameView({ active }: { active: boolean }) {
               />
             )}
             {modal.type === "journal" && <Journal save={game.save} />}
+            {modal.type === "world" && <WorldDialog game={game} onDone={close} />}
+            {modal.type === "quiz-maker" && <QuizMaker game={game} onDone={close} />}
             {modal.type === "help" && <Help />}
             {modal.type === "mission-end" && (
               <div className="text-center">
@@ -328,6 +451,17 @@ export function GameView({ active }: { active: boolean }) {
           </Overlay>
         )}
       </div>
+
+      {creating && (
+        <CreatorPanel
+          game={game}
+          tool={tool}
+          setTool={setTool}
+          onChange={refresh}
+          onClose={() => setCreating(false)}
+          openDialog={(d) => setModal({ type: d === "world" ? "world" : "quiz-maker" })}
+        />
+      )}
 
       <p className="eyebrow text-faint">
         Keys: A/D or ←/→ move · W/Space jump · E use / get in &amp; out · W/S lean in the air · F fire · R ramp · H home. Progress saves in this browser.
@@ -795,6 +929,8 @@ function Help() {
     ["Missions", "Build barracks, then press E at it for the mission board: recon, supply runs, drone drills, codebreaking, rescues, an airlift and a final defence."],
     ["Learn", "Build a school for quizzes (every answer explains itself), crack intel terminals with knowledge, and collect glowing fact books hidden around the world."],
     ["Fly", "Build a helipad (after barracks). In the helicopter, W climbs and S descends."],
+    ["Create", "Press Create to build your own Stickville: platforms, ramps, trampolines, boost pads, coins, timed courses with start and finish lines, signs with your own facts, citizens who talk, and 3D props. Drag things to move them, and play-test as you go. Save it all as a world file to share."],
+    ["Blender", "Model anything in Blender, export it with the Stickville add-on (blender/stickville_blender.py in the project), then Create → Import. A PNG works too."],
     ["Help", "H takes you home and returns all vehicles to their spots. Health refills over time, or instantly at a hospital."],
   ];
   return (

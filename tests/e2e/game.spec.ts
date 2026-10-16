@@ -80,3 +80,60 @@ test("a school quiz explains every answer and pays for right ones", async ({ pag
   await expect(dialog).toContainText("question 2 of 5");
   expect(errors).toEqual([]);
 });
+
+test("creator: place items, bounce on a trampoline, import a Blender model, share a world", async ({ page, errors }) => {
+  const play = await start(page);
+  const canvas = play.locator("canvas[role=img]");
+  const clickWorld = async (fx: number, fy: number) => {
+    const box = (await canvas.boundingBox())!;
+    await page.mouse.click(box.x + box.width * fx, box.y + box.height * fy);
+  };
+  await page.waitForTimeout(800); // let the tab's smooth scroll settle
+  await play.getByRole("button", { name: "Create" }).click();
+  const panel = play.getByRole("region", { name: "Creator" });
+  await panel.getByRole("tab", { name: "Play" }).click();
+  await panel.getByRole("radio", { name: "Trampoline" }).click();
+  // Just right of the hero, on the road
+  await clickWorld(0.62, 0.7);
+  await expect(game(page)).toHaveAttribute("data-props", "1");
+  await panel.getByRole("radio", { name: "Move" }).click();
+  // Walk onto it: the hero is thrown high into the air
+  await page.keyboard.down("KeyD");
+  await expect.poll(async () => Number(await game(page).getAttribute("data-y")), { timeout: 8000 }).toBeLessThan(-150);
+  await page.keyboard.up("KeyD");
+
+  // A model exported by the Blender add-on
+  await panel.getByLabel("Import file").setInputFiles("blender/examples/rocket.stickpack.json");
+  await expect(panel.getByRole("status")).toContainText("Imported 1 item");
+  await clickWorld(0.4, 0.6);
+  await expect(game(page)).toHaveAttribute("data-props", "2");
+
+  // Your own quiz question
+  await panel.getByRole("button", { name: "Quiz maker" }).click();
+  const dialog = play.getByRole("dialog");
+  await dialog.locator("#quiz-q").fill("How many legs does a spider have?");
+  await dialog.locator("#quiz-opt-0").fill("Six");
+  await dialog.locator("#quiz-opt-1").fill("Eight");
+  await dialog.getByLabel("Answer 2 is right").check();
+  await dialog.getByRole("button", { name: "Add question" }).click();
+  await expect(dialog).toContainText("→ Eight");
+  await dialog.getByRole("button", { name: "Done" }).click();
+
+  // A world file round-trips: copy it as code, clear, paste it back
+  await panel.getByRole("button", { name: "World file" }).click();
+  const code = await page.evaluate(() => {
+    const s = JSON.parse(localStorage.getItem("zh-art:stickville")!);
+    return JSON.stringify({ format: "stickville-world", version: 1, name: "t", props: s.props, packs: s.packs, questions: s.myQuestions });
+  });
+  await page.keyboard.press("Escape");
+  await expect(dialog).toBeHidden();
+  await panel.getByRole("button", { name: "Clear" }).click();
+  await panel.getByRole("button", { name: /Remove all/ }).click();
+  await expect(game(page)).toHaveAttribute("data-props", "0");
+  await panel.getByRole("button", { name: "World file" }).click();
+  await dialog.locator("#world-code").fill(code);
+  await dialog.getByRole("button", { name: "Add to my world" }).click();
+  await expect(dialog.getByRole("status")).toContainText("Loaded 2 items");
+  await expect(game(page)).toHaveAttribute("data-props", "2");
+  expect(errors).toEqual([]);
+});

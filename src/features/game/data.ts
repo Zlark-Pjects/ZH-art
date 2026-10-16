@@ -157,7 +157,7 @@ export const MISSIONS: MissionDef[] = [
 /* ---------- Quiz ---------- */
 
 export interface Question {
-  cat: "Maths" | "Science" | "Geography" | "Road safety" | "History" | "Nature" | "Space" | "Tech";
+  cat: "Maths" | "Science" | "Geography" | "Road safety" | "History" | "Nature" | "Space" | "Tech" | "My questions";
   q: string;
   options: string[];
   answer: number;
