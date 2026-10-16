@@ -754,13 +754,31 @@ export function render(c: Ctx, g: City, cssW: number, cssH: number, dpr: number,
       for (const d of lamps) if (inView(d.x, d.y * K)) glow(d.x + 12, d.y * K - 60, 110, "rgba(255,210,120,0.35)");
       // Street lights at every junction
       for (const vr of VROADS) for (const hr of HROADS) if (inView(vr * T, hr * T * K)) glow((vr + 1) * T, (hr + 1) * T * K, 160, "rgba(255,200,110,0.18)");
-      for (const v of g.vehicles) {
-        if (!inView(v.x, v.y * K) || (v.role === "parked" && v !== g.player.vehicle)) continue;
-        const hx = v.x + Math.cos(v.a) * 70;
-        const hy = (v.y + Math.sin(v.a) * 70) * K;
-        glow(hx, hy, 70, "rgba(255,240,190,0.35)");
-      }
       c.globalCompositeOperation = "source-over";
+      // Headlights: a soft beam ahead of each car that's driving. Drawn normally, not added
+      // together, so a queue of cars at a junction doesn't blow out into a white blob.
+      for (const v of g.vehicles) {
+        if (!inView(v.x, v.y * K) || v.kind === "heli") continue;
+        const moving = Math.hypot(v.vx, v.vy) > 30;
+        if (!moving && v !== g.player.vehicle) continue;
+        const fx = Math.cos(v.a);
+        const fy = Math.sin(v.a);
+        const len = v.kind === "bike" ? 80 : 120;
+        const spread = v.kind === "bike" ? 26 : 42;
+        const ox = v.x + fx * 22;
+        const oy = v.y + fy * 22;
+        const beam = c.createLinearGradient(ox, oy * K, ox + fx * len, (oy + fy * len) * K);
+        beam.addColorStop(0, "rgba(255,240,190,0.22)");
+        beam.addColorStop(1, "rgba(255,240,190,0)");
+        c.fillStyle = beam;
+        c.beginPath();
+        c.moveTo(ox - fy * 10, (oy + fx * 10) * K);
+        c.lineTo(ox + fx * len - fy * spread, (oy + fy * len + fx * spread) * K);
+        c.lineTo(ox + fx * len + fy * spread, (oy + fy * len - fx * spread) * K);
+        c.lineTo(ox + fy * 10, (oy - fx * 10) * K);
+        c.closePath();
+        c.fill();
+      }
       c.globalAlpha = 1;
     }
   }

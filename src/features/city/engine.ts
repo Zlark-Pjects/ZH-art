@@ -1005,7 +1005,9 @@ export class City {
     let ahead = 999;
     // Stuck behind something parked for a while? Squeeze past it.
     const patient = v.stuck < 2.5;
-    const things = [...this.vehicles.filter((o) => o !== v && o.z < 10 && (patient || Math.abs(o.vx) + Math.abs(o.vy) > 20)), ...this.peds, this.player.vehicle ? null : this.player].filter(Boolean) as { x: number; y: number }[];
+    // Waiting a long time? Then only you, on foot, can hold a car up.
+    const veryStuck = v.stuck > 5;
+    const things = [...this.vehicles.filter((o) => o !== v && o.z < 10 && (patient || Math.abs(o.vx) + Math.abs(o.vy) > 20)), ...(veryStuck ? [] : this.peds), this.player.vehicle ? null : this.player].filter(Boolean) as { x: number; y: number }[];
     for (const o of things) {
       const rx = o.x - v.x;
       const ry = o.y - v.y;
