@@ -191,6 +191,10 @@ export interface Ped {
   quipT: number;
   hail?: boolean;
   follow?: number;
+  /** Crossing a road: keep walking straight until back on the sidewalk. */
+  crossing?: boolean;
+  /** Seconds before deciding on a new direction, so people don't dither. */
+  turnT?: number;
 }
 
 export interface Drone {
@@ -1107,18 +1111,74 @@ export class City {
         continue;
       }
       if (q.hail) continue;
-      const [dx, dy] = dirs[q.dir];
-      const nx = q.x + dx * q.speed * dt;
-      const ny = q.y + dy * q.speed * dt;
-      const tile = this.map.tileAt(nx + dx * 20, ny + dy * 20);
-      if ((tile !== Tile.Sidewalk && tile !== Tile.Park && tile !== Tile.Sand) || this.blocked(nx, ny, 8) || Math.random() < dt * 0.15) {
-        q.dir = Math.floor(Math.random() * 4);
+      this.walkPed(q, dt);
+    }
+  }
+
+  private walkable(x: number, y: number) {
+    const t = this.map.tileAt(x, y);
+    return t === Tile.Sidewalk || t === Tile.Park || t === Tile.Sand || t === Tile.Plot;
+  }
+
+  /** People stroll along sidewalks, sometimes cross the road, and never freeze in the street. */
+  private walkPed(q: Ped, dt: number) {
+    const dirs = [[1, 0], [0, 1], [-1, 0], [0, -1]];
+    q.turnT = (q.turnT ?? 0) - dt;
+    const onFoot = this.walkable(q.x, q.y);
+    // Ended up in the road (a dodge, a spawn): walk to the nearest sidewalk, straight across
+    if (!onFoot && !q.crossing) {
+      let best = q.dir;
+      let bestD = Infinity;
+      for (let d = 0; d < 4; d++) {
+        for (let k = 1; k <= 4; k++) {
+          if (this.walkable(q.x + dirs[d][0] * k * 32, q.y + dirs[d][1] * k * 32)) {
+            if (k < bestD) {
+              bestD = k;
+              best = d;
+            }
+            break;
+          }
+        }
+      }
+      q.dir = best;
+      q.crossing = true;
+    }
+    const [dx, dy] = dirs[q.dir];
+    const speed = q.crossing ? Math.max(q.speed, 70) : q.speed;
+    const nx = q.x + dx * speed * dt;
+    const ny = q.y + dy * speed * dt;
+    if (q.crossing) {
+      if (this.blocked(nx, ny, 8)) {
+        q.dir = (q.dir + 2) % 4;
       } else {
         q.x = nx;
         q.y = ny;
+        if (this.walkable(q.x, q.y) && this.walkable(q.x + dx * 12, q.y + dy * 12)) {
+          q.crossing = false;
+          q.turnT = 1;
+        }
       }
-      q.phase += q.speed * dt * 0.06;
+      q.phase += speed * dt * 0.06;
+      return;
     }
+    const ahead = this.map.tileAt(nx + dx * 20, ny + dy * 20);
+    const free = this.walkable(nx + dx * 20, ny + dy * 20) && !this.blocked(nx, ny, 8);
+    if (!free || (q.turnT <= 0 && Math.random() < dt * 0.15)) {
+      // At the kerb: now and then cross the road, otherwise turn along the sidewalk
+      if (ahead === Tile.Road && free === false && !this.blocked(nx, ny, 8) && q.turnT <= 0 && Math.random() < 0.25) {
+        q.crossing = true;
+        return;
+      }
+      const options = [0, 1, 2, 3].filter((d) => d !== q.dir && this.walkable(q.x + dirs[d][0] * 28, q.y + dirs[d][1] * 28) && !this.blocked(q.x + dirs[d][0] * 10, q.y + dirs[d][1] * 10, 8));
+      const sideways = options.filter((d) => d !== (q.dir + 2) % 4);
+      const pick = sideways.length && Math.random() < 0.8 ? sideways : options;
+      q.dir = pick.length ? pick[Math.floor(Math.random() * pick.length)] : (q.dir + 2) % 4;
+      q.turnT = 0.8;
+      return;
+    }
+    q.x = nx;
+    q.y = ny;
+    q.phase += speed * dt * 0.06;
   }
 
   /* ---------- Prompts (E) ---------- */
