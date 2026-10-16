@@ -14,3 +14,4 @@ playwright-report/
 dist-stickville/
 __pycache__/
 *.pyc
+dist-android/

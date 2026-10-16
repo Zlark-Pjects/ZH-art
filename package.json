@@ -9,6 +9,7 @@
     "dev": "tsx server.ts",
     "build": "vite build && esbuild server.ts --bundle --platform=node --format=cjs --packages=external --sourcemap --outfile=dist/server.cjs",
     "build:stickville": "vite build --config vite.stickville.config.ts && node scripts/inline-stickville.mjs",
+    "build:android": "npm run build:stickville && node scripts/prepare-android.mjs && npx cap sync android",
     "art": "python3 blender/build_city_art.py",
     "start": "node dist/server.cjs",
     "clean": "rm -rf dist server.js",
@@ -18,6 +19,8 @@
     "test:e2e": "playwright test"
   },
   "dependencies": {
+    "@capacitor/android": "^7.6.9",
+    "@capacitor/core": "^7.6.9",
     "@mediapipe/tasks-vision": "^1.1.0",
     "@tailwindcss/vite": "^4.1.14",
     "@vitejs/plugin-react": "^5.0.4",
@@ -30,6 +33,7 @@
     "vite": "^6.2.3"
   },
   "devDependencies": {
+    "@capacitor/cli": "^7.6.9",
     "@playwright/test": "^1.56.1",
     "@types/express": "^4.17.21",
     "@types/node": "^22.14.0",

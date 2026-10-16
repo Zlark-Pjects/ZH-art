@@ -73,7 +73,8 @@ type Modal =
   | { type: "world" }
   | { type: "quiz-maker" };
 
-export function CityView({ active }: { active: boolean }) {
+/** `fill`: the game takes the whole screen (the Android app), with no page chrome around it. */
+export function CityView({ active, fill = false }: { active: boolean; fill?: boolean }) {
   const wrapRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const gameRef = useRef<City | null>(null);
@@ -448,8 +449,8 @@ export function CityView({ active }: { active: boolean }) {
   };
 
   return (
-    <div className="flex flex-col gap-4">
-      <div className="flex flex-wrap items-end justify-between gap-3">
+    <div className={fill ? "fixed inset-0 flex flex-col bg-black" : "flex flex-col gap-4"}>
+      <div className={cx("flex flex-wrap items-end justify-between gap-3", fill && "hidden")}>
         <div>
           <p className="eyebrow text-accent">Play</p>
           <h2 className="font-display text-4xl uppercase leading-none sm:text-5xl">Stickville City</h2>
@@ -470,12 +471,12 @@ export function CityView({ active }: { active: boolean }) {
         </div>
       </div>
 
-      <div ref={wrapRef} data-testid="stickcity" className="relative overflow-hidden rounded-2xl border border-line bg-black [&:fullscreen]:rounded-none [&:fullscreen]:border-0">
+      <div ref={wrapRef} data-testid="stickcity" className={cx("relative overflow-hidden bg-black", fill ? "min-h-0 flex-1" : "rounded-2xl border border-line [&:fullscreen]:rounded-none [&:fullscreen]:border-0")}>
         <canvas
           ref={canvasRef}
           role="img"
           aria-label={`Stickville City. ${game.save.hero?.name ?? ""}, level ${game.rank().level}, $${game.save.money}.`}
-          className={cx("block aspect-[3/4] w-full touch-none select-none sm:aspect-video [:fullscreen_&]:h-screen [:fullscreen_&]:aspect-auto", building ? (tool ? "cursor-crosshair" : "cursor-grab") : "cursor-crosshair")}
+          className={cx("block w-full touch-none select-none", fill ? "h-full" : "aspect-[3/4] sm:aspect-video [:fullscreen_&]:h-screen [:fullscreen_&]:aspect-auto", building ? (tool ? "cursor-crosshair" : "cursor-grab") : "cursor-crosshair")}
           onPointerDown={onPointerDown}
           onPointerMove={onPointerMove}
           onPointerUp={onPointerUp}
@@ -633,7 +634,7 @@ export function CityView({ active }: { active: boolean }) {
 
       {building && <BuilderBar game={game} tool={tool} setTool={setTool} refresh={refresh} openDialog={(d) => setModal({ type: d })} close={() => setBuilding(false)} />}
 
-      <p className="eyebrow text-faint">
+      <p className={cx("eyebrow text-faint", fill && "hidden")}>
         WASD drive & walk · mouse aim + click shoot · E use · Shift nitro/sprint · Space drift · Tab phone · M map · H home. Saves in this browser.
       </p>
     </div>

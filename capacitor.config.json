@@ -1,0 +1,9 @@
+{
+  "appId": "art.zh.stickville",
+  "appName": "Stickville City",
+  "webDir": "dist-android",
+  "android": {
+    "backgroundColor": "#08080a",
+    "allowMixedContent": false
+  }
+}
