@@ -28,7 +28,7 @@ export async function fresh(page: Page) {
   await expect(page.locator("#tab-storyboard")).toBeVisible();
 }
 
-export async function openTab(page: Page, id: "storyboard" | "looks" | "characters" | "rig" | "export") {
+export async function openTab(page: Page, id: "storyboard" | "looks" | "characters" | "rig" | "export" | "play") {
   await page.locator(`#tab-${id}`).click();
   await expect(page.locator(`#panel-${id}`)).toBeVisible();
   return page.locator(`#panel-${id}`);

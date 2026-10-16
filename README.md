@@ -1,6 +1,6 @@
 # ZH-art — a film studio in the browser
 
-Build a short animated film from one idea: compose the storyboard, give it a look, design and animate a cast, score it, and export a real video file. Everything runs in your browser — no accounts, no AI services, no API keys.
+Build a short animated film from one idea: compose the storyboard, give it a look, design and animate a cast, score it, and export a real video file. It also has a game, **Stickville**, under Play. Everything runs in your browser — no accounts, no AI services, no API keys.
 
 ## The studio
 
@@ -14,6 +14,8 @@ All five parts work on **one project**, which autosaves in your browser.
 | **Characters** | **Forge:** build whole characters from parts (body, head, eyes, hair, headgear, arms, legs, wings or cape, tail, held item), proportions and a palette — or generate them: pick an archetype (knight, beast, spirit, machine, insectoid, celestial, anything), *Surprise me*, mutate a little or a lot, breed two saved characters, lock what you like and reroll the rest. Every design comes from a seed, so it can be reproduced. Five body plans — two legs, four legs, flyer, serpent and floater — each with its own idle, walk, run, jump and attack loops. **Game export:** turn any character into a sprite sheet (PNG, one row per animation, including your own Motion clips and captured takes) with a Phaser-ready JSON atlas, or a zip with import notes for Godot, Unity and GameMaker. | Cast and Motion |
 | **Motion** | Pose your character by dragging its joints, then key poses over time. Each key has its own timing and easing (smooth, linear, ease in/out, overshoot, bounce, hold), with onion-skin ghosts of the neighbouring keys. Layer a procedural motion (run, float, lunge…) on top. Or **capture a performance** from your webcam or **any video file**, then trim, smooth and foot-lock the take, and choose how many keys per second to keep. Save as a clip. **Every body plan follows clips:** four-legged, flying, serpent and floating characters are retargeted from the skeleton (arms drive front legs, wings or a serpent's head; legs drive back legs; hips and lean move the body). | Cast clips |
 | **Export** | Render the film, with transitions, text, song and score, to MP4/WebM at 720p, 1080p, 9:16 or 1:1. Frame by frame with WebCodecs where available (every frame exact, no need to play in real time), real-time recording elsewhere. | The finished video |
+
+| **Play** | **Stickville**, a stick-figure game you build as you play. Make your hero (hair, headwear, skin, top, trousers, shorts or a skirt, colours; six starting looks). Walk to a FOR SALE plot and build: houses, parks and a solar farm pay coins every minute; a garage, barracks and helipad unlock a car, an army jeep and a helicopter; a school runs quizzes; a workshop lets you place stunt ramps; a hospital heals you. Ride the dirt bike from the start and flip it for stunt coins, race the hills against your best time, and take seven military missions from the barracks (recon, supply drop, drone drill, codebreaker, rescue, airlift, hold the outpost) to climb from Recruit to General. Learning is part of play: every quiz answer explains itself, intel terminals open with a question, every building comes with a builder's note, and twelve fact books are hidden around the world. Keyboard, or on-screen buttons on a phone; progress saves in the browser. | Itself |
 
 **Projects** (top right): switch between projects, start new ones, duplicate, delete, and save/open `.zhart.json` project files to back up or move work between computers.
 
@@ -63,6 +65,7 @@ src/features/looks/                Look library and film grade
 src/features/forge/                Character Forge, sprite sheet export (sprites.ts)
 src/features/export/               Canvas + MediaRecorder video export
 src/features/motion/               Motion: rig stage, keyframe track, capture panel
+src/features/game/                 Stickville: world (terrain), engine (simulation), render (canvas), data (buildings, missions, quiz), GameView (menus, touch controls)
 src/features/mocap/                Pose tracking (webcam, video file) and take clean-up
 src/ui/                            Design-system primitives and the FilmGate frame
 src/lib/                           Save-file helper, zip writer, score synth, song analysis and playback (music.ts)

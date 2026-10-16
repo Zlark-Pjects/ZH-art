@@ -9,6 +9,7 @@ import { Leader } from "./features/Leader";
 
 const CharactersView = lazy(() => import("./features/forge/CharactersView").then((m) => ({ default: m.CharactersView })));
 const MotionView = lazy(() => import("./features/motion/MotionView").then((m) => ({ default: m.MotionView })));
+const GameView = lazy(() => import("./features/game/GameView").then((m) => ({ default: m.GameView })));
 const ExportPanel = lazy(() => import("./features/export/ExportPanel").then((m) => ({ default: m.ExportPanel })));
 
 const VIEWS = [
@@ -17,6 +18,7 @@ const VIEWS = [
   { id: "characters", label: "Characters" },
   { id: "rig", label: "Motion" },
   { id: "export", label: "Export" },
+  { id: "play", label: "Play" },
 ] as const;
 
 type ViewId = (typeof VIEWS)[number]["id"];
@@ -105,6 +107,7 @@ export default function App() {
           )}
           {panel("rig", <MotionView studio={studio} />)}
           {panel("export", <ExportPanel studio={studio} />)}
+          {panel("play", <GameView active={view === "play"} />)}
         </Suspense>
       </main>
 
@@ -136,6 +139,7 @@ function Guide({ onClose }: { onClose: () => void }) {
     ["Characters", "Forge whole characters from parts — bodies, heads, eyes, wings, tails, props — on two legs, four legs, wings, a serpent's coil or floating — or let the generator surprise you: pick an archetype, mutate, breed two designs, and lock what you like. Export any character as a game sprite sheet with idle, walk, run, jump and attack loops, plus any of your Motion clips."],
     ["Motion", "Pose your character by dragging its joints, then key poses over time: each key has its own timing and easing (smooth, ease in or out, overshoot, bounce, hold), with onion-skin ghosts of the keys either side. Layer a motion like a run or a float on top. Or capture a performance from your webcam or any video file, then trim, smooth and foot-lock the take. Tracking runs on your device; nothing is uploaded. Save clips to cast in any scene. Characters that aren't two-legged follow clips too: arms drive front legs, wings or a serpent's head, legs drive back legs."],
     ["Export", "Render the finished film, with its transitions, text, song and score, to a video file — widescreen, vertical 9:16 or square. Most browsers render it frame by frame, faster than playing it, with every frame exact."],
+    ["Play", "Stickville, a game of stick figures: make your hero, build a town plot by plot, ride a dirt bike, car, army jeep or helicopter, race the hills, run military missions in the desert, and learn on the way with quizzes, intel codes and hidden fact books."],
   ];
 
 
