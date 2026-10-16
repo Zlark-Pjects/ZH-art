@@ -66,3 +66,4 @@ jobs:
           body: |
             Android build of Stickville City from ${{ github.sha }}.
             Download stickville-city.apk on the phone, open it, and allow "install unknown apps" when asked.
+            Newer builds install straight over the old one and keep the saved game.
