@@ -16,7 +16,8 @@
     "lint": "tsc --noEmit",
     "prebuild": "node scripts/copy-mediapipe.mjs",
     "test": "npm run build && playwright test",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "build:web": "npm run build:stickville && node scripts/prepare-web.mjs"
   },
   "dependencies": {
     "@capacitor/android": "^7.6.9",

@@ -449,7 +449,7 @@ export function CityView({ active, fill = false }: { active: boolean; fill?: boo
   };
 
   return (
-    <div className={fill ? "fixed inset-0 flex flex-col bg-black" : "flex flex-col gap-4"}>
+    <div className={fill ? "fixed inset-0 flex flex-col bg-black pb-[env(safe-area-inset-bottom)] pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)] pt-[env(safe-area-inset-top)]" : "flex flex-col gap-4"}>
       <div className={cx("flex flex-wrap items-end justify-between gap-3", fill && "hidden")}>
         <div>
           <p className="eyebrow text-accent">Play</p>

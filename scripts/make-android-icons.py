@@ -46,4 +46,9 @@ for p in glob.glob(f"{RES}/drawable*/splash.png"):
     tw = d.textlength(t, font=font)
     d.text(((w - tw) / 2, h / 2 + s * 0.16), t, font=font, fill=AMBER)
     im.convert("RGB").save(p)
+# Web / iPhone Home Screen icons (iOS rounds the corners itself, so fill the square)
+import os
+os.makedirs("docs", exist_ok=True)
+for name, n in {"apple-touch-icon.png": 180, "icon-192.png": 192, "icon-512.png": 512}.items():
+    place(Image.new("RGBA", (n, n), AMBER), 0.74).convert("RGB").save(f"docs/{name}")
 print("icons ok")
