@@ -26,6 +26,7 @@ import {
 import { sfx, engineHum } from "./audio";
 import { ART, CityMap, H, MIL_X, T, Tile, W, type Place } from "./map";
 import type { Station } from "./music";
+import { Extras, type DailyState, type Message, type PetSave } from "./extras";
 
 export const PPM = 24;
 const TAU = Math.PI * 2;
@@ -93,6 +94,12 @@ export interface Save {
   myQuestions: Question[];
   nextPropId: number;
   station: Station;
+  pet: PetSave | null;
+  messages: Message[];
+  /** Which story texts have been sent, so nobody repeats themselves. */
+  texted: string[];
+  stickers: number[];
+  daily: DailyState | null;
 }
 
 export const newSave = (): Save => ({
@@ -118,6 +125,11 @@ export const newSave = (): Save => ({
   myQuestions: [],
   nextPropId: 1,
   station: "lofi",
+  pet: null,
+  messages: [],
+  texted: [],
+  stickers: [],
+  daily: null,
 });
 
 /* ---------- Entities ---------- */
@@ -152,6 +164,8 @@ export interface Vehicle {
   dir: number;
   turn: { dir: number; at: number } | null;
   wait: number;
+  /** Traffic: seconds spent stopped behind something. */
+  stuck: number;
   /** Racer/convoy: index of the next waypoint. */
   wp: number;
   lap: number;
@@ -291,7 +305,8 @@ export type CityEvent =
   | { type: "shop"; shop: "mods" | "armory" | "style" }
   | { type: "trivia"; hard: boolean }
   | { type: "terminal"; index: number; question: Question }
-  | { type: "result"; ok: boolean; title: string; text: string; stars?: number };
+  | { type: "result"; ok: boolean; title: string; text: string; stars?: number }
+  | { type: "sticker"; index: number };
 
 export interface Input {
   up: boolean;
@@ -366,10 +381,13 @@ export class City {
   talking: number | null = null;
   private nextId = 1;
   private emit: (e: CityEvent) => void;
+  extras: Extras;
+  private kmBank = 0;
 
   constructor(save: Save, emit: (e: CityEvent) => void) {
     this.save = save;
     this.emit = emit;
+    this.extras = new Extras(this);
     this.dyn = new Uint8Array(this.map.cw * this.map.ch);
     const home = this.map.places.home;
     this.player = { x: home.x, y: home.y, vx: 0, vy: 0, facing: 1, phase: 0, hp: 100, shield: 0, hurtT: 0, calmT: 0, fireT: 0, vehicle: null, downT: 0 };
@@ -385,6 +403,14 @@ export class City {
   }
 
   /* ---------- Helpers ---------- */
+
+  emitSave() {
+    this.emit({ type: "save" });
+  }
+
+  onSticker(index: number) {
+    this.emit({ type: "sticker", index });
+  }
 
   rank() {
     return levelOf(this.save.xp);
@@ -440,12 +466,13 @@ export class City {
 
   private makeVehicle(kind: VKind, x: number, y: number, a: number, role: Vehicle["role"], paint?: Paint): Vehicle {
     const sprite = kind === "car" ? `car_${paint ?? "blue"}` : kind;
-    return { id: this.nextId++, kind, sprite, x, y, a, vx: 0, vy: 0, z: 0, vz: 0, spin: 0, air: 0, hp: SPECS[kind].hp, role, dir: 0, turn: null, wait: 0, wp: 0, lap: 0, finished: 0 };
+    return { id: this.nextId++, kind, sprite, x, y, a, vx: 0, vy: 0, z: 0, vz: 0, spin: 0, air: 0, hp: SPECS[kind].hp, role, dir: 0, turn: null, wait: 0, stuck: 0, wp: 0, lap: 0, finished: 0 };
   }
 
   /** The vehicles you own sit outside your block: a bike from the start, then the garage car and helicopter. */
   syncOwned() {
-    const want: [VKind, number, number][] = [["bike", this.map.places.home.x - 170, this.map.places.home.y + 30]];
+    // Parked on the sidewalk outside your block, out of the traffic lanes
+    const want: [VKind, number, number][] = [["bike", this.map.places.home.x - 170, this.map.places.home.y - 6]];
     this.save.plots.forEach((k, i) => {
       const p = this.map.plots[i];
       if (k === "garage") want.push(["car", p.x, p.y + 60]);
@@ -551,6 +578,7 @@ export class City {
     this.updateJob(dt);
     this.updateQuests();
     this.updateProps(dt);
+    this.extras.update(dt);
 
     for (const q of this.particles) {
       q.x += q.vx * dt;
@@ -586,6 +614,13 @@ export class City {
     const v = p.vehicle;
     engineHum(v ? Math.min(1, Math.hypot(v.vx, v.vy) / SPECS[v.kind].max) : 0, v ? 0.04 : 0);
     this.save.stats.metres += (speed * dt) / PPM;
+    if (p.vehicle || speed > 30) {
+      this.kmBank += (speed * dt) / PPM / 1000;
+      if (this.kmBank >= 0.1) {
+        this.extras.bump("km", this.kmBank);
+        this.kmBank = 0;
+      }
+    }
     pressed.clear();
   }
 
@@ -704,7 +739,7 @@ export class City {
       const turnRate = spec.turn * (this.has("grip") ? 1.15 : 1) * speedK * Math.sign(fwd || 1) * (i.brake ? 1.35 : 1);
       v.a += steer * turnRate * dt;
       // Grip: kill sideways slide, less so with the handbrake (that's a drift)
-      const grip = (i.brake ? 1.4 : spec.grip * gripUp) * dt;
+      const grip = (i.brake ? 1.4 : spec.grip * gripUp * this.extras.grip()) * dt;
       lat *= Math.max(0, 1 - grip);
       if (i.brake) fwd *= 1 - 0.5 * dt;
       // Drift scoring and tyre smoke
@@ -748,6 +783,7 @@ export class City {
     if (pts < 60) return;
     const cash = Math.round(pts / 25);
     this.save.bestDrift = Math.max(this.save.bestDrift, pts);
+    this.extras.bump("drift", pts);
     this.reward(cash, Math.round(pts / 40));
     this.stunt = { score: pts, t: 1.6, label: `DRIFT ${pts}` };
   }
@@ -786,6 +822,7 @@ export class City {
         const label = turns > 0 ? `${turns * 360}° SPIN · ${score}` : `BIG AIR · ${score}`;
         this.stunt = { score, t: 2, label };
         if (score > this.save.bestStunt) this.save.bestStunt = score;
+        this.extras.bump("stunt", score);
         this.reward(cash, Math.round(score / 30));
         sfx.flip();
         if (turns > 0) this.confetti(v.x, v.y);
@@ -962,7 +999,9 @@ export class City {
     v.a += wrap(target - v.a) * Math.min(1, dt * 8);
     // Slow for anything ahead in the lane
     let ahead = 999;
-    const things = [...this.vehicles.filter((o) => o !== v && o.z < 10), ...this.peds, this.player.vehicle ? null : this.player].filter(Boolean) as { x: number; y: number }[];
+    // Stuck behind something parked for a while? Squeeze past it.
+    const patient = v.stuck < 2.5;
+    const things = [...this.vehicles.filter((o) => o !== v && o.z < 10 && (patient || Math.abs(o.vx) + Math.abs(o.vy) > 20)), ...this.peds, this.player.vehicle ? null : this.player].filter(Boolean) as { x: number; y: number }[];
     for (const o of things) {
       const rx = o.x - v.x;
       const ry = o.y - v.y;
@@ -978,6 +1017,7 @@ export class City {
       if (Math.random() < dt * 0.8 && dist(v, this.focus()) < 500) sfx.honk();
     }
     const speed = Math.hypot(v.vx, v.vy);
+    v.stuck = speed < 10 && want < 10 ? v.stuck + dt : Math.max(0, v.stuck - dt * 0.5);
     const s = speed + clamp(want - speed, -500 * dt, 260 * dt);
     v.vx = dx * s;
     v.vy = dy * s;
@@ -1315,6 +1355,7 @@ export class City {
     this.puff(d.x, d.y, "#ffb224", d.boss ? 40 : 18);
     this.puff(d.x, d.y, "#2a2a30", 10);
     this.save.stats.drones++;
+    this.extras.bump("drones");
     this.save.money += d.boss ? 60 : 8;
     const m = this.mission;
     if (m) m.kills++;
@@ -1525,6 +1566,7 @@ export class City {
       : m.t <= a ? 3 : m.t <= b ? 2 : 1;
     const prev = this.save.missions[m.def.id];
     const first = !prev;
+    this.extras.bump("mission");
     this.save.missions[m.def.id] = { stars: Math.max(stars, prev?.stars ?? 0), best: Math.min(m.t, prev?.best ?? Infinity) };
     const money = Math.round((first ? m.def.reward : m.def.reward * 0.4) * (0.7 + stars * 0.1));
     const xp = first ? m.def.xp : Math.round(m.def.xp / 3);
@@ -1841,7 +1883,10 @@ export class City {
     const rec = this.save.races[r.def.id] ?? { wins: 0 };
     const record = !rec.best || r.t < rec.best;
     if (record) rec.best = r.t;
-    if (place === 1) rec.wins++;
+    if (place === 1) {
+      rec.wins++;
+      this.extras.bump("race");
+    }
     this.save.races[r.def.id] = rec;
     this.reward(prize, place === 1 ? 120 : 50);
     if (place === 1) {
@@ -1925,6 +1970,7 @@ export class City {
         j.count++;
         j.earned += tip;
         this.save.deliveries++;
+        this.extras.bump("pizza");
         this.reward(tip, 15, `Delivered! +$${tip}${j.combo > 1 ? ` · combo ×${j.combo}` : ""}`);
         sfx.coin();
         if (j.count >= 5) {
@@ -1968,6 +2014,7 @@ export class City {
         const pay = j.fare + Math.round(Math.max(0, j.t) * 3);
         j.earned += pay;
         this.save.stats.fares++;
+        this.extras.bump("fare");
         this.reward(pay, 20, `Fare paid: $${pay}`);
         this.peds = this.peds.filter((x) => x !== q);
         j.passenger = null;
@@ -1986,7 +2033,10 @@ export class City {
   /* ---------- Trivia ---------- */
 
   answerTrivia(right: boolean, hard: boolean) {
-    if (right) this.reward(hard ? 45 : 25, hard ? 12 : 8);
+    if (right) {
+      this.reward(hard ? 45 : 25, hard ? 12 : 8);
+      this.extras.bump("quiz");
+    }
   }
 
   finishTrivia(score: number) {

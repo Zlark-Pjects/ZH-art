@@ -4,6 +4,11 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import {
   BarChart3,
+  Camera,
+  CalendarCheck,
+  Dog,
+  MessageCircle,
+  Sticker,
   Brain,
   ChevronLeft,
   Crosshair,
@@ -22,14 +27,20 @@ import {
 import { Button, cx } from "../../ui";
 import { CONTACTS, CONTACT_ORDER, MISSIONS, PAINTS, PAINT_COST, PAINT_SWATCH, RACES, UPGRADES, type ContactId, type UpgradeId } from "./data";
 import { SPECS, type City } from "./engine";
-import { minimapImage } from "./render";
+import { drawPet, minimapImage } from "./render";
+import { PET_COLORS, STICKERS, type PetKind } from "./extras";
 import { HeroPreview } from "./ui";
 import type { Station } from "./music";
 import { H, W, type Place } from "./map";
 
-export type App = "home" | "map" | "missions" | "races" | "jobs" | "people" | "garage" | "style" | "brain" | "radio" | "stats" | "settings";
+export type App = "home" | "map" | "missions" | "races" | "jobs" | "people" | "garage" | "style" | "brain" | "radio" | "stats" | "settings" | "messages" | "pet" | "stickers" | "camera" | "daily";
 
 const APPS: { id: App | "builder"; label: string; icon: ReactNode; color: string }[] = [
+  { id: "messages", label: "Messages", icon: <MessageCircle />, color: "#5fa35a" },
+  { id: "daily", label: "Daily", icon: <CalendarCheck />, color: "#ef5a3c" },
+  { id: "camera", label: "Camera", icon: <Camera />, color: "#2a2a30" },
+  { id: "pet", label: "Pet", icon: <Dog />, color: "#c9a26a" },
+  { id: "stickers", label: "Stickers", icon: <Sticker />, color: "#9b6bff" },
   { id: "map", label: "Map", icon: <MapIcon />, color: "#5fa35a" },
   { id: "missions", label: "Missions", icon: <Crosshair />, color: "#6b7a3a" },
   { id: "races", label: "Races", icon: <Flag />, color: "#ef5a3c" },
@@ -55,6 +66,9 @@ export interface PhoneActions {
   muted: boolean;
   mute: () => void;
   reset: () => void;
+  photo: () => void;
+  photos: string[];
+  deletePhoto: (i: number) => void;
 }
 
 export function Phone({ game, app, setApp, actions }: { game: City; app: App; setApp: (a: App) => void; actions: PhoneActions }) {
@@ -62,6 +76,10 @@ export function Phone({ game, app, setApp, actions }: { game: City; app: App; se
   const hours = Math.floor(game.dayPhase * 24);
   const mins = Math.floor((game.dayPhase * 24 * 60) % 60);
   const news = CONTACT_ORDER.filter((id) => game.hasNews(id)).length;
+  const unread = game.extras.unread();
+  const daily = game.extras.daily();
+  const dailyLeft = 3 - daily.state.claimed.length;
+  const badge = (id: App | "builder") => (id === "people" ? news : id === "messages" ? unread : id === "daily" ? dailyLeft : 0);
   const gps = (p: Place) => {
     game.gps = p;
     game.toast(`GPS set: ${p.label}`, "#8bd99b");
@@ -91,13 +109,13 @@ export function Phone({ game, app, setApp, actions }: { game: City; app: App; se
                 <button
                   key={a.id}
                   type="button"
-                  aria-label={a.id === "people" && news > 0 ? `People (${news} new)` : a.label}
+                  aria-label={badge(a.id) > 0 ? `${a.label} (${badge(a.id)} new)` : a.label}
                   onClick={() => (a.id === "builder" ? actions.builder() : setApp(a.id))}
                   className="flex flex-col items-center gap-1.5 text-[11px] text-fg/90"
                 >
                   <span className="relative flex h-14 w-14 items-center justify-center rounded-2xl text-white shadow-inner [&_svg]:h-6 [&_svg]:w-6" style={{ background: a.color }}>
                     {a.icon}
-                    {a.id === "people" && news > 0 && <span aria-hidden className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-danger px-1 font-mono text-[10px]">{news}</span>}
+                    {badge(a.id) > 0 && <span aria-hidden className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-danger px-1 font-mono text-[10px]">{badge(a.id)}</span>}
                   </span>
                   {a.label}
                 </button>
@@ -204,6 +222,11 @@ export function Phone({ game, app, setApp, actions }: { game: City; app: App; se
             </List>
           )}
           {app === "stats" && <StatsApp game={game} />}
+          {app === "messages" && <MessagesApp game={game} gps={gps} />}
+          {app === "daily" && <DailyApp game={game} />}
+          {app === "pet" && <PetApp game={game} refresh={actions.refresh} />}
+          {app === "stickers" && <StickersApp game={game} />}
+          {app === "camera" && <CameraApp actions={actions} />}
           {app === "settings" && <SettingsApp actions={actions} />}
         </div>
       </div>
@@ -476,7 +499,7 @@ function SettingsApp({ actions }: { actions: PhoneActions }) {
         <p className="mt-1">
           <b className="text-fg">WASD / arrows</b> move & drive · <b className="text-fg">Mouse</b> aim, click to shoot (or F) · <b className="text-fg">E</b> use, get in & out · <b className="text-fg">Shift</b> sprint / nitro · <b className="text-fg">Space</b> handbrake drift · <b className="text-fg">A/D in the air</b> spin · <b className="text-fg">Tab</b> phone · <b className="text-fg">M</b> map · <b className="text-fg">H</b> go home
         </p>
-        <p className="mt-1">Helicopter: move to take off, Space to land.</p>
+        <p className="mt-1">Helicopter: move to take off, Space to land. Camera: drag to frame, Space to snap.</p>
       </div>
       {confirm ? (
         <Button variant="danger" onClick={actions.reset}>
@@ -487,6 +510,209 @@ function SettingsApp({ actions }: { actions: PhoneActions }) {
           Start a new game…
         </Button>
       )}
+    </List>
+  );
+}
+
+/* ---------- New apps ---------- */
+
+function MessagesApp({ game, gps }: { game: City; gps: (p: Place) => void }) {
+  const msgs = game.save.messages;
+  useEffect(() => {
+    for (const m of msgs) m.read = true;
+    game.emitSave();
+  }, [game, msgs]);
+  if (!msgs.length) return <List title="Messages"><p className="text-[13px] text-muted">No messages yet. People text you when they need you.</p></List>;
+  return (
+    <List title="Messages">
+      {[...msgs].reverse().map((m, i) => {
+        const look = m.from !== "city" && m.from !== "pet" ? CONTACTS[m.from].look : null;
+        return (
+          <div key={i} className="flex items-start gap-2">
+            <div className="shrink-0 overflow-hidden rounded-full bg-white/[0.06]">{look ? <HeroPreview hero={look} size={36} pose="stand" /> : <span className="flex h-9 w-9 items-center justify-center text-[18px]">{m.from === "pet" ? "🐾" : "🏛️"}</span>}</div>
+            <div className="min-w-0 flex-1">
+              <p className="text-[12px] font-medium text-accent">{game.extras.sender(m.from)}</p>
+              <p className="mt-0.5 w-fit max-w-full rounded-2xl rounded-tl-sm bg-[#fbf8f1] px-3 py-2 text-[14px] leading-snug text-[#1d1d24]">{m.text}</p>
+              {look && (
+                <button type="button" className="mt-1 text-[12px] text-ok" onClick={() => gps({ ...game.contactPos(m.from as ContactId), label: game.extras.sender(m.from) })}>
+                  GPS to {game.extras.sender(m.from)} →
+                </button>
+              )}
+            </div>
+          </div>
+        );
+      })}
+    </List>
+  );
+}
+
+function DailyApp({ game }: { game: City }) {
+  const { defs, state } = game.extras.daily();
+  return (
+    <List title="Daily">
+      <p className="text-[12px] text-muted">Three new challenges every day. ${150} each, ${300} bonus for all three. No streaks, no pressure.</p>
+      {defs.map((d, i) => {
+        const done = state.claimed.includes(i);
+        const v = Math.min(d.goal, state.progress[d.key] ?? 0);
+        return (
+          <div key={d.key} className={cx("rounded-2xl p-3", done ? "bg-ok/15" : "bg-white/[0.04]")}>
+            <p className="flex justify-between text-[14px] font-medium">
+              <span>{d.label}</span>
+              {done && <span className="text-ok">✓</span>}
+            </p>
+            <div className="mt-2 h-2 overflow-hidden rounded-full bg-white/10">
+              <div className="h-full rounded-full bg-accent" style={{ width: `${(v / d.goal) * 100}%` }} />
+            </div>
+            <p className="mt-1 font-mono text-[11px] text-muted tabular-nums">
+              {d.key === "km" ? v.toFixed(1) : Math.floor(v)} / {d.goal.toLocaleString()}
+            </p>
+          </div>
+        );
+      })}
+    </List>
+  );
+}
+
+function PetApp({ game, refresh }: { game: City; refresh: () => void }) {
+  const pet = game.save.pet;
+  const [kind, setKind] = useState<PetKind>(pet?.kind ?? "dog");
+  const [name, setName] = useState(pet?.name ?? "");
+  const [color, setColor] = useState(pet?.color ?? PET_COLORS.dog[0]);
+  const ref = useRef<HTMLCanvasElement>(null);
+  useEffect(() => {
+    const cv = ref.current;
+    const c = cv?.getContext("2d");
+    if (!cv || !c) return;
+    let raf = 0;
+    const dpr = Math.min(2, window.devicePixelRatio || 1);
+    cv.width = 160 * dpr;
+    cv.height = 110 * dpr;
+    const t0 = performance.now();
+    const draw = (now: number) => {
+      raf = requestAnimationFrame(draw);
+      const t = (now - t0) / 1000;
+      c.setTransform(dpr, 0, 0, dpr, 0, 0);
+      c.clearRect(0, 0, 160, 110);
+      drawPet(c, 80, 92, kind, color, 1, t * 6, false, t, 2.4);
+    };
+    raf = requestAnimationFrame(draw);
+    return () => cancelAnimationFrame(raf);
+  }, [kind, color]);
+  return (
+    <List title={pet ? pet.name : "Adopt a pet"}>
+      <div className="flex justify-center rounded-2xl bg-white/[0.04]">
+        <canvas ref={ref} style={{ width: 160, height: 110 }} role="img" aria-label="Your pet" />
+      </div>
+      <p className="text-[12px] text-muted">{pet ? `${pet.name} follows you everywhere, rides along in your car, and sniffs out hidden stickers — follow the "!"` : "A friend who follows you around the city and helps you find hidden stickers. Free from the city shelter."}</p>
+      <div className="flex gap-2" role="radiogroup" aria-label="Kind of pet">
+        {(["dog", "cat"] as PetKind[]).map((k) => (
+          <button
+            key={k}
+            type="button"
+            role="radio"
+            aria-checked={kind === k}
+            onClick={() => {
+              setKind(k);
+              setColor(PET_COLORS[k][0]);
+            }}
+            className={cx("flex-1 rounded-xl border px-3 py-2 text-[14px] capitalize", kind === k ? "border-accent bg-accent/10" : "border-line")}
+          >
+            {k}
+          </button>
+        ))}
+      </div>
+      <div className="flex gap-2">
+        {PET_COLORS[kind].map((c) => (
+          <button key={c} type="button" aria-label={`Colour ${c}`} aria-pressed={color === c} onClick={() => setColor(c)} className={cx("h-8 w-8 rounded-full ring-2", color === c ? "ring-fg" : "ring-transparent")} style={{ background: c }} />
+        ))}
+      </div>
+      <input id="pet-name" className="rounded-xl border border-line bg-surface px-3 py-2 text-[14px]" maxLength={14} value={name} placeholder={kind === "dog" ? "Name, e.g. Biscuit" : "Name, e.g. Mochi"} onChange={(e) => setName(e.target.value)} aria-label="Pet name" />
+      <Button
+        variant="primary"
+        onClick={() => {
+          game.extras.adopt(kind, name, color);
+          refresh();
+        }}
+      >
+        {pet ? "Save" : `Adopt ${name.trim() || (kind === "dog" ? "a dog" : "a cat")}`}
+      </Button>
+    </List>
+  );
+}
+
+function StickersApp({ game }: { game: City }) {
+  const found = game.save.stickers;
+  const [open, setOpen] = useState<number | null>(null);
+  return (
+    <List title="Stickers">
+      <p className="text-[12px] text-muted">
+        {found.length}/{STICKERS.length} found. They're hidden all over the city — a pet helps. Finish the album for $1,000.
+      </p>
+      <div className="grid grid-cols-4 gap-2">
+        {STICKERS.map((k, i) => {
+          const has = found.includes(i);
+          return (
+            <button
+              key={i}
+              type="button"
+              disabled={!has}
+              aria-label={has ? k.title : "Not found yet"}
+              onClick={() => setOpen(open === i ? null : i)}
+              className={cx("flex aspect-square items-center justify-center rounded-2xl text-[26px]", has ? "bg-[#fbf8f1]" : "bg-white/[0.04] text-[18px] text-faint")}
+            >
+              {has ? k.icon : "?"}
+            </button>
+          );
+        })}
+      </div>
+      {open !== null && (
+        <div className="rounded-2xl bg-[#fbf8f1] p-3 text-[#1d1d24]">
+          <p className="text-[15px] font-semibold">
+            {STICKERS[open].icon} {STICKERS[open].title}
+          </p>
+          <p className="mt-1 text-[14px] leading-snug text-[#3a3a42]">{STICKERS[open].fact}</p>
+        </div>
+      )}
+    </List>
+  );
+}
+
+function CameraApp({ actions }: { actions: PhoneActions }) {
+  const [view, setView] = useState<number | null>(null);
+  return (
+    <List title="Camera">
+      <Button variant="primary" icon={<Camera className="h-4 w-4" />} onClick={actions.photo}>
+        Take a photo
+      </Button>
+      <p className="text-[12px] text-muted">Photo mode hides the screen clutter. Drag to frame your shot, zoom, pick a filter. Your last 10 photos stay here.</p>
+      {view !== null && actions.photos[view] && (
+        <div className="flex flex-col gap-2">
+          <img src={actions.photos[view]} alt={`Photo ${view + 1}`} className="w-full rounded-xl" />
+          <div className="flex gap-2">
+            <a href={actions.photos[view]} download={`stickville-${view + 1}.jpg`} className="flex-1 rounded-xl border border-line px-3 py-2 text-center text-[13px] hover:border-accent">
+              Save to device
+            </a>
+            <Button
+              size="sm"
+              variant="danger"
+              onClick={() => {
+                actions.deletePhoto(view);
+                setView(null);
+              }}
+            >
+              Delete
+            </Button>
+          </div>
+          <p className="text-[11px] text-faint">If Save doesn't work in this window, press and hold the photo (or right-click it) to save it.</p>
+        </div>
+      )}
+      <div className="grid grid-cols-3 gap-1.5">
+        {actions.photos.map((src, i) => (
+          <button key={i} type="button" onClick={() => setView(i)} className={cx("overflow-hidden rounded-lg ring-2", view === i ? "ring-accent" : "ring-transparent")} aria-label={`Photo ${i + 1}`}>
+            <img src={src} alt="" className="aspect-video w-full object-cover" />
+          </button>
+        ))}
+      </div>
     </List>
   );
 }

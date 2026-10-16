@@ -66,10 +66,11 @@ test("every phone app opens", async ({ page, errors }) => {
   await page.keyboard.press("Tab");
   const phone = play.getByRole("dialog", { name: "Phone" });
   await expect(phone).toBeVisible();
-  for (const app of ["Map", "Missions", "Races", "Jobs", "People", "Garage", "Style", "Brain", "Radio", "Stats", "Settings"]) {
+  const headings: Record<string, string> = { Brain: "Brain games", Races: "Street races", Pet: "Adopt a pet" };
+  for (const app of ["Messages", "Daily", "Camera", "Pet", "Stickers", "Map", "Missions", "Races", "Jobs", "People", "Garage", "Style", "Brain", "Radio", "Stats", "Settings"]) {
     // People carries a badge with the number of people who have news
     await phone.getByRole("button", { name: new RegExp(`^${app}( \\(\\d+ new\\))?$`) }).click();
-    await expect(phone.getByRole("heading", { name: app === "Brain" ? "Brain games" : app === "Races" ? "Street races" : app })).toBeVisible();
+    await expect(phone.getByRole("heading", { name: headings[app] ?? app })).toBeVisible();
     await phone.getByRole("button", { name: "Apps" }).click();
   }
   await page.keyboard.press("Escape");
@@ -186,5 +187,42 @@ test("build a home, buy an upgrade, and use the Builder with a Blender model", a
   await dialog.getByRole("button", { name: "Add to my city" }).click();
   await expect(dialog.getByRole("status")).toContainText("Loaded 2 items");
   await expect(city(page)).toHaveAttribute("data-props", "4");
+  expect(errors).toEqual([]);
+});
+
+test("adopt a pet, find a sticker, get texts, and take a photo", async ({ page, errors }) => {
+  const play = await startWith(page, { money: 500 });
+  // Nana Bea texts you on your first day
+  await expect.poll(() => page.evaluate(() => (window as any).stickcity.save.messages.length), { timeout: 15_000 }).toBeGreaterThan(0);
+  await expect(play.getByRole("button", { name: /Phone \(\d+ new messages\)/ })).toBeVisible();
+  // Adopt a dog from the phone
+  await page.keyboard.press("Tab");
+  const phone = play.getByRole("dialog", { name: "Phone" });
+  await phone.getByRole("button", { name: /^Pet/ }).click();
+  await phone.getByLabel("Pet name").fill("Pixel");
+  await phone.getByRole("button", { name: "Adopt Pixel" }).click();
+  await expect(phone.getByRole("heading", { name: "Pixel" })).toBeVisible();
+  await page.keyboard.press("Escape");
+  // Walk onto the nearest sticker: the album fills and it pays $50
+  const found = await page.evaluate(() => {
+    const g = (window as any).stickcity;
+    const st = g.extras.stickers[0];
+    Object.assign(g.player, { x: st.x, y: st.y });
+    for (let i = 0; i < 5; i++) g.update(1 / 60);
+    return { stickers: g.save.stickers, pet: !!g.extras.pet };
+  });
+  expect(found.stickers).toEqual([0]);
+  expect(found.pet).toBe(true);
+  await expect(play.getByRole("status").filter({ hasText: "Sticker found" })).toBeVisible();
+  // Photo mode: snap one and it's in the Camera app
+  await page.keyboard.press("Tab");
+  await phone.getByRole("button", { name: /^Camera/ }).click();
+  await phone.getByRole("button", { name: "Take a photo" }).click();
+  await play.getByRole("radio", { name: "Vivid" }).click();
+  await play.getByRole("button", { name: "Take photo" }).click();
+  await play.getByRole("button", { name: "Done" }).click();
+  await page.keyboard.press("Tab");
+  await phone.getByRole("button", { name: /^Camera/ }).click();
+  await expect(phone.getByRole("button", { name: "Photo 1" })).toBeVisible();
   expect(errors).toEqual([]);
 });

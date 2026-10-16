@@ -6,6 +6,7 @@ import { SPECS, type City, type Vehicle } from "./engine";
 import { COLS, H, HROADS, K, KZ, ROWS, T, Tile, VROADS, W, type CityMap } from "./map";
 import { fileUrl, packImage, spinnerFrame, sprite } from "./art";
 import { INK, drawHero, mix, type Pose } from "./stick";
+import { STICKERS } from "./extras";
 
 type Ctx = CanvasRenderingContext2D;
 const TAU = Math.PI * 2;
@@ -385,7 +386,7 @@ interface Drawable {
   draw: () => void;
 }
 
-export function render(c: Ctx, g: City, cssW: number, cssH: number, dpr: number) {
+export function render(c: Ctx, g: City, cssW: number, cssH: number, dpr: number, opts: { hud?: boolean } = {}) {
   const vw = viewWidth(cssW, g.cam.zoom);
   const scale = cssW / vw;
   const vh = cssH / scale;
@@ -645,6 +646,38 @@ export function render(c: Ctx, g: City, cssW: number, cssH: number, dpr: number)
       },
     });
   }
+  // Hidden stickers
+  const s = g.save;
+  g.extras.stickers.forEach((st, i) => {
+    if (s.stickers.includes(i) || !inView(st.x, st.y * K)) return;
+    list.push({
+      y: st.y,
+      draw: () => {
+        const sy = st.y * K - 18 + Math.sin(time * 3 + i) * 4;
+        shadow(c, st.x, st.y * K, 10, 4, 0.2);
+        c.fillStyle = `rgba(255,236,170,${0.25 + 0.15 * Math.sin(time * 5 + i)})`;
+        c.beginPath();
+        c.arc(st.x, sy, 22, 0, TAU);
+        c.fill();
+        c.fillStyle = "#fdfcf8";
+        c.strokeStyle = INK;
+        c.lineWidth = 2;
+        c.beginPath();
+        c.arc(st.x, sy, 14, 0, TAU);
+        c.fill();
+        c.stroke();
+        c.font = "16px system-ui, 'Apple Color Emoji', 'Segoe UI Emoji', sans-serif";
+        c.textAlign = "center";
+        c.textBaseline = "middle";
+        c.fillText(STICKERS[i].icon, st.x, sy + 1);
+        c.textBaseline = "alphabetic";
+      },
+    });
+  });
+  // Your pet
+  const pet = g.extras.pet;
+  if (pet && s.pet && !g.player.vehicle) list.push({ y: pet.y, draw: () => drawPet(c, pet.x, pet.y * K, s.pet!.kind, s.pet!.color, pet.facing, pet.phase, pet.sniff !== null, time) });
+
   // The hero
   const p = g.player;
   if (!p.vehicle && g.save.hero) {
@@ -732,6 +765,36 @@ export function render(c: Ctx, g: City, cssW: number, cssH: number, dpr: number)
     }
   }
 
+  // Rain
+  const rain = g.extras.rain;
+  if (rain > 0.02) {
+    c.setTransform(dpr, 0, 0, dpr, 0, 0);
+    c.fillStyle = `rgba(40,60,90,${rain * 0.22})`;
+    c.fillRect(0, 0, cssW, cssH);
+    c.strokeStyle = `rgba(200,220,255,${0.35 * rain})`;
+    c.lineWidth = 1.2;
+    c.beginPath();
+    const n = Math.round(160 * rain);
+    for (let i = 0; i < n; i++) {
+      const x = (hash(i) * cssW + time * 90) % cssW;
+      const y = (hash(i + 300) * cssH + time * 900 * (0.8 + hash(i + 7) * 0.4)) % cssH;
+      c.moveTo(x, y);
+      c.lineTo(x - 4, y + 16);
+    }
+    c.stroke();
+    // Ripples on the ground
+    c.setTransform(scale * dpr, 0, 0, scale * dpr, (cssW / 2 - camX * scale) * dpr, (cssH / 2 - camSY * scale) * dpr);
+    c.strokeStyle = `rgba(220,235,255,${0.3 * rain})`;
+    for (let i = 0; i < 24 * rain; i++) {
+      const k = (time * 1.5 + hash(i + 40)) % 1;
+      const x = left + hash(i + Math.floor(time * 1.5 + hash(i + 40))) * vw;
+      const y = top + hash(i + 90 + Math.floor(time * 1.5 + hash(i + 40))) * vh;
+      c.beginPath();
+      c.ellipse(x, y, 3 + k * 10, (3 + k * 10) * K, 0, 0, TAU);
+      c.stroke();
+    }
+  }
+
   // Speech from signs and people placed in the Builder
   if (g.talking !== null) {
     const q = g.save.props.find((r) => r.id === g.talking);
@@ -749,7 +812,7 @@ export function render(c: Ctx, g: City, cssW: number, cssH: number, dpr: number)
     }
   }
 
-  drawHud(c, g, cssW, cssH, dpr, { camX, camSY, scale });
+  if (opts.hud !== false) drawHud(c, g, cssW, cssH, dpr, { camX, camSY, scale });
 }
 
 /* ---------- Builder props ---------- */
@@ -823,6 +886,77 @@ function drawProp(c: Ctx, g: City, kind: string, x: number, y: number, q: { id: 
 
 /** Small preview images for the Builder palette. */
 export const previewUrl = (kind: string) => fileUrl(kind);
+
+/* ---------- Pets ---------- */
+
+export function drawPet(c: Ctx, x: number, sy: number, kind: "dog" | "cat", color: string, facing: number, phase: number, alert: boolean, time: number, scale = 1) {
+  c.save();
+  c.translate(x, sy);
+  c.scale(facing * scale, scale);
+  shadow(c, 0, 0, 13, 4, 0.22);
+  const dark = mix(color, "#000000", 0.3);
+  const step = Math.sin(phase) * 4;
+  c.strokeStyle = dark;
+  c.lineWidth = 3;
+  c.lineCap = "round";
+  // Legs
+  c.beginPath();
+  for (const [lx, s] of [[-8, 1], [-4, -1], [6, -1], [10, 1]] as const) {
+    c.moveTo(lx, -9);
+    c.lineTo(lx + step * s * 0.6, 0);
+  }
+  c.stroke();
+  // Tail: dogs wag, cats curl up
+  c.strokeStyle = color;
+  c.lineWidth = kind === "dog" ? 4 : 3;
+  c.beginPath();
+  c.moveTo(-11, -13);
+  if (kind === "dog") c.quadraticCurveTo(-18, -18 + Math.sin(time * 14) * 4, -20, -24 + Math.sin(time * 14) * 3);
+  else c.quadraticCurveTo(-22, -12, -18, -28 + Math.sin(time * 2) * 2);
+  c.stroke();
+  // Body and head
+  c.fillStyle = color;
+  c.strokeStyle = INK;
+  c.lineWidth = 1.5;
+  c.beginPath();
+  c.ellipse(0, -13, 13, 7, 0, 0, TAU);
+  c.fill();
+  c.stroke();
+  c.beginPath();
+  c.arc(13, -21, 7, 0, TAU);
+  c.fill();
+  c.stroke();
+  c.fillStyle = kind === "dog" ? dark : color;
+  c.beginPath();
+  if (kind === "dog") {
+    c.ellipse(9, -22, 3, 6, 0.4, 0, TAU);
+  } else {
+    c.moveTo(8, -25);
+    c.lineTo(9, -32);
+    c.lineTo(13, -27);
+    c.moveTo(14, -27);
+    c.lineTo(18, -32);
+    c.lineTo(19, -25);
+  }
+  c.fill();
+  if (kind === "dog") {
+    c.fillStyle = INK;
+    c.beginPath();
+    c.arc(20, -20, 2, 0, TAU);
+    c.fill();
+  }
+  c.fillStyle = INK;
+  c.beginPath();
+  c.arc(15, -23, 1.4, 0, TAU);
+  c.fill();
+  c.restore();
+  if (alert) {
+    c.fillStyle = "#ffb224";
+    c.font = "800 16px Geist, system-ui, sans-serif";
+    c.textAlign = "center";
+    c.fillText("!", x, sy - 38 + Math.sin(time * 8) * 3);
+  }
+}
 
 /* ---------- HUD ---------- */
 
@@ -927,6 +1061,38 @@ function drawHud(c: Ctx, g: City, W_: number, H_: number, dpr: number, cam: { ca
   c.beginPath();
   c.roundRect(mx, my, ms, ms, 14);
   c.stroke();
+
+  // A text message slides in under the minimap
+  const note = g.extras.notice;
+  if (note) {
+    const k = Math.min(1, (5 - note.t) * 4, note.t * 2);
+    const nw = Math.min(W_ - 24, 280);
+    const nx = W_ - nw - 12 + (1 - k) * 40;
+    const ny = my + ms + 10;
+    c.globalAlpha = Math.max(0, k);
+    panel(c, nx, ny, nw, 58, "rgba(250,248,241,0.96)", 14);
+    c.textAlign = "left";
+    c.fillStyle = "#a35a00";
+    c.font = font(700, 10, true);
+    c.fillText(`MESSAGE · ${g.extras.sender(note.from).toUpperCase()}`, nx + 12, ny + 15);
+    c.fillStyle = "#1d1d24";
+    c.font = font(500, 12);
+    const words = note.text.split(" ");
+    let line = "";
+    let ly = ny + 32;
+    let lines = 0;
+    for (const w of words) {
+      const next = line ? `${line} ${w}` : w;
+      if (c.measureText(next).width > nw - 24 && line) {
+        c.fillText(line, nx + 12, ly);
+        line = w;
+        ly += 15;
+        if (++lines === 2) break;
+      } else line = next;
+    }
+    if (lines < 2) c.fillText(line, nx + 12, ly);
+    c.globalAlpha = 1;
+  }
 
   // GPS arrow
   if (g.gps) {

@@ -9,10 +9,35 @@ import { setMuted, sfx } from "./audio";
 import { Radio, type Station } from "./music";
 import { K, ART } from "./map";
 import { Phone, type App } from "./Phone";
+import { STICKERS } from "./extras";
 import { HeroEditor, HeroPreview, Heading, Overlay, Quiz, shuffle } from "./ui";
 
 const SAVE_KEY = "zh-art:stickcity";
 const MUTE_KEY = "zh-art:stickcity-muted";
+const PHOTO_KEY = "zh-art:stickcity-photos";
+const FILTERS: [string, string][] = [["None", "none"], ["Warm", "sepia(0.35) saturate(1.3) brightness(1.05)"], ["Vivid", "saturate(1.7) contrast(1.1)"], ["Mono", "grayscale(1) contrast(1.15)"], ["Dream", "brightness(1.1) saturate(1.3) hue-rotate(-20deg) blur(0.4px)"], ["Night", "hue-rotate(190deg) saturate(1.4) brightness(0.85)"]];
+
+function loadPhotos(): string[] {
+  try {
+    const p = JSON.parse(localStorage.getItem(PHOTO_KEY) ?? "[]");
+    return Array.isArray(p) ? p.filter((x) => typeof x === "string" && x.startsWith("data:image/")) : [];
+  } catch {
+    return [];
+  }
+}
+
+function savePhotos(list: string[]) {
+  // Drop the oldest photos until they fit in the browser's storage
+  for (let n = list.length; n >= 0; n--) {
+    try {
+      localStorage.setItem(PHOTO_KEY, JSON.stringify(list.slice(list.length - n)));
+      return list.slice(list.length - n);
+    } catch {
+      /* too big: try with one fewer */
+    }
+  }
+  return [];
+}
 
 function loadSave(): Save {
   try {
@@ -58,6 +83,15 @@ export function CityView({ active }: { active: boolean }) {
   const [app, setApp] = useState<App>("home");
   const [tool, setTool] = useState<string | null>(null);
   const [building, setBuilding] = useState(false);
+  const [photo, setPhoto] = useState<{ filter: number } | null>(null);
+  const photoRef = useRef<{ filter: number } | null>(null);
+  photoRef.current = photo;
+  const [photos, setPhotos] = useState<string[]>(loadPhotos);
+  const [flash, setFlash] = useState(false);
+  const [sticker, setSticker] = useState<number | null>(null);
+  const [unread, setUnread] = useState(0);
+  const snapRef = useRef<() => void>(() => {});
+  const exitCameraRef = useRef<() => void>(() => {});
   const [, setTick] = useState(0);
   const [muted, setMutedState] = useState(() => {
     try {
@@ -96,6 +130,9 @@ export function CityView({ active }: { active: boolean }) {
       case "terminal":
         setModal({ type: "terminal", index: e.index, question: e.question });
         break;
+      case "sticker":
+        setSticker(e.index);
+        break;
       case "result":
         setModal({ type: "result", ok: e.ok, title: e.title, text: e.text, stars: e.stars });
         break;
@@ -117,8 +154,8 @@ export function CityView({ active }: { active: boolean }) {
   }, [game]);
   useEffect(() => setMuted(muted), [muted]);
   useEffect(() => {
-    game.paused = !active || !!modal || phone;
-  }, [active, modal, phone, game]);
+    game.paused = !active || !!modal || phone || !!photo;
+  }, [active, modal, phone, photo, game]);
   useEffect(() => {
     if (!active) radio.stop();
   }, [active, radio]);
@@ -155,7 +192,7 @@ export function CityView({ active }: { active: boolean }) {
         canvas.width = Math.round(w * dpr);
         canvas.height = Math.round(h * dpr);
       }
-      render(ctx, game, w, h, dpr);
+      render(ctx, game, w, h, dpr, { hud: !photoRef.current });
       const nowInside = !!game.player.vehicle;
       if (nowInside !== inside) {
         inside = nowInside;
@@ -173,6 +210,8 @@ export function CityView({ active }: { active: boolean }) {
         d.mission = game.mission?.def.id ?? "";
         d.props = String(game.save.props.length);
         d.prompt = game.prompt?.text ?? "";
+        const n = game.extras.unread();
+        setUnread((u) => (u === n ? u : n));
       }
     };
     raf = requestAnimationFrame(frame);
@@ -216,6 +255,14 @@ export function CityView({ active }: { active: boolean }) {
       if (typing(e) || e.metaKey || e.ctrlKey || e.altKey) return;
       if (modal) {
         if (e.key === "Escape" && !(modal.type === "hero" && modal.mode === "new")) setModal(null);
+        return;
+      }
+      if (photoRef.current) {
+        if (e.key === "Escape") exitCameraRef.current();
+        if (e.code === "Space" || e.code === "Enter") {
+          e.preventDefault();
+          snapRef.current();
+        }
         return;
       }
       if (e.code === "Tab" || e.code === "KeyP") {
@@ -292,6 +339,11 @@ export function CityView({ active }: { active: boolean }) {
   };
   const onPointerDown = (e: React.PointerEvent<HTMLCanvasElement>) => {
     if (modal || phone) return;
+    if (photo) {
+      capture(e);
+      drag.current = { dx: 0, dy: 0, sx: e.clientX, sy: e.clientY, ox: game.camOffset.x, oy: game.camOffset.y };
+      return;
+    }
     if (game.save.station !== "off" && radio.station === "off") radio.play(game.save.station);
     const w = toGround(e);
     if (!building) {
@@ -314,6 +366,11 @@ export function CityView({ active }: { active: boolean }) {
     refresh();
   };
   const onPointerMove = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    if (photo) {
+      const d = drag.current;
+      if (d) game.camOffset = { x: d.ox - (e.clientX - d.sx) / game.view.scale, y: d.oy - (e.clientY - d.sy) / game.view.scale / K };
+      return;
+    }
     const w = toGround(e);
     if (!building) {
       if (e.pointerType === "mouse") game.input.aim = { x: w.x, y: w.y + 20 };
@@ -340,6 +397,40 @@ export function CityView({ active }: { active: boolean }) {
     setModal(null);
     refresh();
   };
+  const openCamera = () => {
+    setPhone(false);
+    setBuilding(false);
+    setPhoto({ filter: 0 });
+  };
+  const exitCamera = () => {
+    setPhoto(null);
+    game.camOffset = { x: 0, y: 0 };
+  };
+  const snap = () => {
+    const cv = canvasRef.current;
+    if (!cv || !photo) return;
+    const w = 800;
+    const h = Math.round((cv.height / cv.width) * w);
+    const out = document.createElement("canvas");
+    out.width = w;
+    out.height = h;
+    const c = out.getContext("2d")!;
+    c.filter = FILTERS[photo.filter][1];
+    c.drawImage(cv, 0, 0, w, h);
+    c.filter = "none";
+    c.fillStyle = "rgba(255,255,255,0.85)";
+    c.font = "600 14px Geist, system-ui, sans-serif";
+    c.fillText("Stickville City", 14, h - 14);
+    const url = out.toDataURL("image/jpeg", 0.8);
+    setPhotos((list) => savePhotos([...list, url].slice(-10)));
+    setFlash(true);
+    window.setTimeout(() => setFlash(false), 180);
+    sfx.page();
+    game.extras.bump("photo");
+    game.toast("Photo saved to your phone's Camera app", "#8bd99b");
+  };
+  snapRef.current = snap;
+  exitCameraRef.current = exitCamera;
   const toggleMute = () =>
     setMutedState((m) => {
       try {
@@ -367,8 +458,9 @@ export function CityView({ active }: { active: boolean }) {
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <Button size="sm" variant="primary" icon={<Smartphone className="h-4 w-4" />} onClick={() => (setPhone((p) => !p), setApp("home"))}>
+          <Button size="sm" variant="primary" icon={<Smartphone className="h-4 w-4" />} onClick={() => (setPhone((p) => !p), setApp("home"))} aria-label={unread ? `Phone (${unread} new messages)` : "Phone"}>
             Phone
+            {unread > 0 && <span className="ml-0.5 rounded-full bg-ink px-1.5 font-mono text-[10px] text-accent">{unread}</span>}
           </Button>
           <Button size="sm" variant={building ? "primary" : "secondary"} aria-pressed={building} icon={<Hammer className="h-4 w-4" />} onClick={() => setBuilding((b) => !b)}>
             Builder
@@ -394,8 +486,20 @@ export function CityView({ active }: { active: boolean }) {
             game.input.fire = false;
           }}
           onContextMenu={(e) => e.preventDefault()}
+          style={photo ? { filter: FILTERS[photo.filter][1] } : undefined}
         />
-        <TouchControls game={game} hidden={!!modal || phone} onPhone={() => (setPhone(true), setApp("home"))} />
+        <TouchControls game={game} hidden={!!modal || phone || !!photo} onPhone={() => (setPhone(true), setApp("home"))} />
+        {photo && (
+          <PhotoBar
+            filter={photo.filter}
+            setFilter={(i) => setPhoto({ filter: i })}
+            zoom={(k) => (game.cam.zoom = Math.max(0.5, Math.min(2.2, game.cam.zoom * k)))}
+            snap={snap}
+            exit={exitCamera}
+          />
+        )}
+        {flash && <div className="pointer-events-none absolute inset-0 z-40 bg-white/80" />}
+        {sticker !== null && <StickerCard index={sticker} onDone={() => setSticker(null)} />}
         {phone && (
           <div className="absolute inset-0 z-30 bg-black/30" onClick={() => setPhone(false)}>
             <Phone
@@ -421,6 +525,9 @@ export function CityView({ active }: { active: boolean }) {
                 volume: (v) => radio.setVolume(v),
                 muted,
                 mute: toggleMute,
+                photo: openCamera,
+                photos,
+                deletePhoto: (i) => setPhotos((list) => savePhotos(list.filter((_, k) => k !== i))),
                 reset: () => {
                   try {
                     localStorage.removeItem(SAVE_KEY);
@@ -1112,3 +1219,52 @@ function TouchControls({ game, hidden, onPhone }: { game: City; hidden: boolean;
   );
 }
 
+
+/* ---------- Photo mode and sticker card ---------- */
+
+function PhotoBar({ filter, setFilter, zoom, snap, exit }: { filter: number; setFilter: (i: number) => void; zoom: (k: number) => void; snap: () => void; exit: () => void }) {
+  return (
+    <div className="absolute inset-x-0 bottom-0 z-30 flex flex-col items-center gap-3 bg-gradient-to-t from-black/70 to-transparent p-4 pt-10">
+      <div className="flex max-w-full gap-1.5 overflow-x-auto" role="radiogroup" aria-label="Filter">
+        {FILTERS.map(([label], i) => (
+          <button key={label} type="button" role="radio" aria-checked={filter === i} onClick={() => setFilter(i)} className={cx("shrink-0 rounded-full px-3 py-1 text-[13px]", filter === i ? "bg-white text-ink" : "bg-black/40 text-white")}>
+            {label}
+          </button>
+        ))}
+      </div>
+      <div className="flex items-center gap-4">
+        <button type="button" aria-label="Zoom out" onClick={() => zoom(0.85)} className="h-11 w-11 rounded-full bg-black/50 text-xl text-white">
+          −
+        </button>
+        <button type="button" aria-label="Take photo" onClick={snap} className="h-16 w-16 rounded-full border-4 border-white bg-white/30 active:bg-white" />
+        <button type="button" aria-label="Zoom in" onClick={() => zoom(1.18)} className="h-11 w-11 rounded-full bg-black/50 text-xl text-white">
+          +
+        </button>
+      </div>
+      <p className="text-[12px] text-white/80">Drag to frame · Space to snap · Esc to leave</p>
+      <button type="button" onClick={exit} className="absolute right-4 top-4 rounded-full bg-black/50 px-3 py-1 text-[13px] text-white">
+        Done
+      </button>
+    </div>
+  );
+}
+
+function StickerCard({ index, onDone }: { index: number; onDone: () => void }) {
+  useEffect(() => {
+    const id = window.setTimeout(onDone, 8000);
+    return () => window.clearTimeout(id);
+  }, [index, onDone]);
+  const k = STICKERS[index];
+  return (
+    <div role="status" className="absolute bottom-4 left-4 z-20 max-w-xs animate-rise rounded-2xl bg-[#fbf8f1] p-4 text-[#1d1d24] shadow-2xl sm:bottom-6 sm:left-6 [@media(pointer:coarse)]:bottom-40">
+      <button type="button" aria-label="Dismiss" onClick={onDone} className="absolute right-3 top-2 text-[#5a5650]">
+        ✕
+      </button>
+      <p className="font-mono text-[11px] font-semibold uppercase tracking-[0.1em] text-[#a35a00]">Sticker found · did you know?</p>
+      <p className="mt-1 text-[17px] font-semibold">
+        {k.icon} {k.title}
+      </p>
+      <p className="mt-1 pr-3 text-[14px] leading-snug text-[#3a3a42]">{k.fact}</p>
+    </div>
+  );
+}
