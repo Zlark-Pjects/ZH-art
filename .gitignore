@@ -11,3 +11,4 @@ coverage/
 public/mediapipe/
 test-results/
 playwright-report/
+dist-stickville/

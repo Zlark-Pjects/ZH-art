@@ -37,6 +37,16 @@ NODE_ENV=production npm start   # honours PORT
 
 The server only hosts the app; it has no API endpoints.
 
+### Stickville on its own
+
+The game also builds as one self-contained HTML file, without the film studio:
+
+```bash
+npm run build:stickville   # → dist-stickville/stickville.html
+```
+
+Open that file directly in a browser, or upload it anywhere that serves static files (GitHub Pages, Netlify, itch.io as an HTML game). Its scripts and styles are inlined; only the fonts load from Google Fonts, with system fallbacks offline. Progress saves in the player's browser.
+
 ### Tests
 
 ```bash
