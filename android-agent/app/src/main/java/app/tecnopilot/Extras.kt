@@ -227,6 +227,15 @@ object TecnoGuide {
         Tip(listOf("overheat", "too hot", "getting hot", "heats up"), "If the phone gets hot: stop charging while gaming, take off the case, lower brightness, close games and camera, and keep it out of the sun. Heat is the biggest cause of battery wear."),
         Tip(listOf("wont charge", "won't charge", "slow charging", "charging slow"), "Slow charging: use the original charger and cable, clean the port gently with a dry toothbrush, avoid using heavy apps while charging, and try a restart. If the battery health shows a fault, visit Carlcare."),
         Tip(listOf("restart", "reboot"), "Restart: hold Power and tap Restart. Once a week clears memory leaks and stuck apps."),
+        Tip(listOf("wallpaper"), "Wallpaper: long-press an empty spot on the home screen › Wallpapers. A dark, still wallpaper is lightest on a budget phone."),
+        Tip(listOf("ringtone"), "Ringtone: Settings › Sound & vibration › Phone ringtone. You can pick any song from your files with 'Add ringtone' or the + button."),
+        Tip(listOf("fingerprint", "face unlock", "screen lock", "pin lock"), "Screen lock and fingerprint: Settings › Security › Screen lock / Fingerprint / Face unlock. Set a PIN first; fingerprint and face need it as a backup."),
+        Tip(listOf("dual sim", "sim card", "sim settings", "default sim"), "SIM settings: Settings › Network & Internet › SIM cards (Dual SIM) to choose which SIM is used for calls, SMS and mobile data."),
+        Tip(listOf("transfer", "new phone", "move data", "share files", "xender", "send files"), "Moving files to another phone: Android's Quick Share (Nearby Share) in the share menu works offline over Wi-Fi Direct. Many Tecno phones also have 'Phone Clone' / 'Tecno Share'."),
+        Tip(listOf("eye comfort", "blue light", "night light", "eye protection"), "Eye comfort: Settings › Display › Eye care / Eye comfort (Night light) adds a warm filter at night and can be scheduled from sunset to sunrise."),
+        Tip(listOf("font size", "text size", "bigger text", "display size"), "Text size: Settings › Display › Font size and Display size. Pilot can't change these, but it's two sliders."),
+        Tip(listOf("storage card", "sd card", "memory card"), "SD card: Settings › Storage shows it. Set the Camera to save to the SD card (Camera › Settings › Storage location) to keep internal storage free."),
+        Tip(listOf("clear cache", "cache"), "Clear an app's cache: Settings › Apps › choose the app › Storage › Clear cache. It's safe (no data lost). 'Clear data/storage' resets the app and signs you out."),
         Tip(listOf("block porn", "parental", "child", "kids", "adult content", "porn", "explicit"), "Tecno Pilot's Safe mode blocks adult and pornographic sites in every browser and app and keeps Google, Bing and YouTube in safe mode. Turn it on in Setup › Safe mode (or say \"safe mode on\") and set a PIN so it can't be switched off without you."),
     )
 
@@ -249,5 +258,92 @@ object Clock {
                 "Today is ${SimpleDateFormat("EEEE d MMMM yyyy", Locale.getDefault()).format(now)}."
             else -> null
         }
+    }
+}
+
+/** Little offline helpers: passwords, coins, dice, countdowns. */
+object Handy {
+    private val rnd = java.security.SecureRandom()
+
+    fun password(length: Int): String {
+        val chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#%&*?"
+        val n = length.coerceIn(8, 40)
+        return "New password: " + (1..n).map { chars[rnd.nextInt(chars.length)] }.joinToString("") +
+            "\nLong-press to copy. Use a different password for every account."
+    }
+
+    fun coin() = if (rnd.nextBoolean()) "🪙 Heads" else "🪙 Tails"
+
+    fun dice(count: Int) = (1..count.coerceIn(1, 6)).map { rnd.nextInt(6) + 1 }.let {
+        "🎲 " + it.joinToString(" + ") + if (it.size > 1) " = ${it.sum()}" else ""
+    }
+
+    private val MONTHS = listOf("jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec")
+
+    /** "days until 25 december", "how many days to christmas", "days until 2027-01-01". */
+    fun daysUntil(q: String): String? {
+        val s = q.lowercase()
+        if (!Regex("\\b(days? (until|till|to|before)|how long (until|till|to))\\b").containsMatchIn(s)) return null
+        val now = Calendar.getInstance().apply { set(Calendar.HOUR_OF_DAY, 0); set(Calendar.MINUTE, 0); set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0) }
+        val target = (now.clone() as Calendar)
+        when {
+            "christmas" in s -> { target.set(Calendar.MONTH, 11); target.set(Calendar.DAY_OF_MONTH, 25) }
+            "new year" in s -> { target.set(Calendar.MONTH, 0); target.set(Calendar.DAY_OF_MONTH, 1); target.add(Calendar.YEAR, 1) }
+            else -> {
+                Regex("(\\d{4})-(\\d{1,2})-(\\d{1,2})").find(s)?.let {
+                    target.set(it.groupValues[1].toInt(), it.groupValues[2].toInt() - 1, it.groupValues[3].toInt())
+                } ?: run {
+                    // "1 january" / "1st of jan", then "january 1" / "dec 31".
+                    val dm = Regex("(\\d{1,2})(?:st|nd|rd|th)?\\s+(?:of\\s+)?([a-z]{3})[a-z]*").findAll(s)
+                        .firstOrNull { MONTHS.indexOf(it.groupValues[2]) >= 0 }?.let { it.groupValues[1].toInt() to MONTHS.indexOf(it.groupValues[2]) }
+                    val md = Regex("([a-z]{3})[a-z]*\\s+(\\d{1,2})").findAll(s)
+                        .firstOrNull { MONTHS.indexOf(it.groupValues[1]) >= 0 }?.let { it.groupValues[2].toInt() to MONTHS.indexOf(it.groupValues[1]) }
+                    val (day, mon) = dm ?: md ?: return null
+                    target.set(Calendar.MONTH, mon); target.set(Calendar.DAY_OF_MONTH, day)
+                }
+            }
+        }
+        if (target.before(now) && !Regex("\\d{4}-").containsMatchIn(s)) target.add(Calendar.YEAR, 1)
+        val days = ((target.timeInMillis - now.timeInMillis) / 86_400_000L)
+        return "${SimpleDateFormat("EEEE d MMMM yyyy", Locale.getDefault()).format(target.time)} is " +
+            when { days == 0L -> "today! 🎉"; days < 0 -> "${-days} days ago."; else -> "in $days days." }
+    }
+}
+
+/** A morning summary built entirely on the phone. */
+object Briefing {
+    fun build(ctx: Context): String {
+        val v = DeviceInfo.read(ctx)
+        val b = v.battery
+        val greeting = when (Calendar.getInstance().get(Calendar.HOUR_OF_DAY)) { in 5..11 -> "Good morning"; in 12..17 -> "Good afternoon"; else -> "Good evening" }
+        return buildString {
+            appendLine("$greeting! ${SimpleDateFormat("EEEE d MMMM, HH:mm", Locale.getDefault()).format(Date())}.")
+            appendLine("- Battery ${b.level}%${if (b.charging) " (charging)" else ""}, ${b.tempC}°C")
+            appendLine("- Storage ${pct(v.storageFree, v.storageTotal)}% free (${bytes(v.storageFree)})")
+            val notes = Prefs(ctx).notes
+            if (notes.isNotEmpty()) appendLine("- ${notes.size} note(s); latest: ${notes.last().substringAfter(" · ")}")
+            if (NotificationCatcher.granted(ctx)) {
+                val missed = NotificationCatcher.recent(ctx, 12 * 60, 100).lines().filter { it.startsWith("[") }
+                if (missed.isNotEmpty()) {
+                    val apps = missed.map { it.substringAfter("] ").substringBefore(":") }.groupingBy { it }.eachCount()
+                        .entries.sortedByDescending { it.value }.take(4).joinToString { "${it.key} ${it.value}" }
+                    appendLine("- ${missed.size} notifications in the last 12 h ($apps)")
+                }
+            }
+            if (ContentFilter.active) appendLine("- 🛡 Safe mode is on")
+            val r = Checkup.run(ctx)
+            append("- Phone health ${r.score}/100" + (r.issues.firstOrNull()?.let { "; top tip: ${it.title}" } ?: ""))
+        }
+    }
+}
+
+/** Battery-saving profile: dimmer screen, short timeout, then the battery saver switch. */
+object PowerSaver {
+    fun apply(ctx: Context, host: Host): String {
+        val a = Controls.setBrightness(ctx, host, 30, false)
+        if (a.startsWith("Needs")) return a
+        Controls.setScreenTimeout(ctx, host, 30)
+        host.launch(android.content.Intent(android.provider.Settings.ACTION_BATTERY_SAVER_SETTINGS))
+        return "Power saver profile: brightness 30%, screen sleeps after 30 s. I opened Battery saver: switch it on to limit background apps too."
     }
 }

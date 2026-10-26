@@ -74,6 +74,19 @@ class Prefs(context: Context) {
         }
         set(v) = sp.edit().putString("notes", JSONArray(v).toString()).apply()
 
+    /** Daily screen-time alert in minutes; 0 = off. */
+    var screenLimitMin: Int
+        get() = sp.getInt("screen_limit", 0)
+        set(v) = sp.edit().putInt("screen_limit", v).apply()
+
+    /** Day stamp (yyyyDDD) of the last alert of each kind, so each fires at most once a day. */
+    fun alertedToday(kind: String): Boolean {
+        val today = java.util.Calendar.getInstance().let { it.get(java.util.Calendar.YEAR) * 1000 + it.get(java.util.Calendar.DAY_OF_YEAR) }
+        if (sp.getInt("alert_$kind", 0) == today) return true
+        sp.edit().putInt("alert_$kind", today).apply()
+        return false
+    }
+
     companion object {
         val MODELS = listOf(
             "claude-opus-5-5" to "Opus 5.5 · smartest (default)",

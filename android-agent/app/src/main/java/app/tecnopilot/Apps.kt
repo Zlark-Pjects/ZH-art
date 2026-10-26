@@ -55,6 +55,18 @@ object Apps {
         s.appBytes + s.dataBytes
     }.getOrNull()
 
+    /** Foreground time of launchable apps since midnight. */
+    fun screenTimeTodayMs(ctx: Context): Long {
+        val usm = ctx.getSystemService(UsageStatsManager::class.java)
+        val start = java.util.Calendar.getInstance().apply {
+            set(java.util.Calendar.HOUR_OF_DAY, 0); set(java.util.Calendar.MINUTE, 0); set(java.util.Calendar.SECOND, 0)
+        }.timeInMillis
+        val launchable = installed(ctx).filter { it.launchable }.map { it.pkg }.toSet()
+        return usm.queryAndAggregateUsageStats(start, System.currentTimeMillis()).values
+            .filter { it.packageName in launchable && it.packageName != ctx.packageName }
+            .sumOf { it.totalTimeInForeground }
+    }
+
     fun usage(ctx: Context, days: Int): String {
         if (!hasUsageAccess(ctx)) return NO_USAGE
         val usm = ctx.getSystemService(UsageStatsManager::class.java)

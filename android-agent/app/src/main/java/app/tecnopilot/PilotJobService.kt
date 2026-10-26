@@ -25,6 +25,7 @@ class PilotJobService : JobService() {
                     JOB_SAMPLE -> {
                         BatteryLog.record(this)
                         chargeAlert(this)
+                        healthAlerts(this)
                     }
                     JOB_DAILY -> if (Prefs(this).dailyCheckup) {
                         val r = Checkup.run(this)
@@ -69,6 +70,26 @@ class PilotJobService : JobService() {
                 prefs.lastChargeAlertAt = now
                 notify(ctx, 3, "Battery at ${b.level}% — unplug now",
                     "Stopping around $limit% instead of 100% keeps the battery healthy for longer.")
+            }
+        }
+
+        /** Overheating, nearly-full storage and the daily screen-time limit; each at most once a day. */
+        private fun healthAlerts(ctx: Context) {
+            val prefs = Prefs(ctx)
+            val b = DeviceInfo.battery(ctx)
+            if (b.tempC >= 45f && !prefs.alertedToday("heat")) {
+                notify(ctx, 4, "Phone is hot (${b.tempC}°C)", "Close games and the camera, stop charging for a while and take off the case.")
+            }
+            val stat = android.os.StatFs(android.os.Environment.getDataDirectory().path)
+            if (stat.availableBytes * 100 / stat.totalBytes < 10 && !prefs.alertedToday("storage")) {
+                notify(ctx, 5, "Storage almost full", "Only ${bytes(stat.availableBytes)} left. Open Tecno Pilot and say \"free up space\".")
+            }
+            val limit = prefs.screenLimitMin
+            if (limit > 0 && Apps.hasUsageAccess(ctx)) {
+                val today = Apps.screenTimeTodayMs(ctx)
+                if (today >= limit * 60_000L && !prefs.alertedToday("screen")) {
+                    notify(ctx, 6, "Screen time: ${duration(today)} today", "You set a daily limit of ${duration(limit * 60_000L)}. Time for a break? 🌿")
+                }
             }
         }
 

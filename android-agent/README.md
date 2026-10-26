@@ -28,6 +28,7 @@ Setup › Online / offline chooses **Auto** (the default: Claude when online, on
 | **Data usage** | Which apps used your mobile data or Wi-Fi this month. |
 | **Notes & to-dos** | "note buy bread", "my notes", "delete note 2", kept on the phone. |
 | **Offline extras** | Calculator ("15% of 2400"), unit converter ("5 km to miles", "2 GB to MB", "100 F in C"), time and date, the biggest apps, and a built-in Tecno/HiOS how-to guide (screenshots, Memory Fusion, developer options, hotspot, app lock, factory reset, safe-mode boot, IMEI, backups, overheating…). |
+| **More offline helpers** | "Good morning" briefing (battery, storage, notes, missed notifications, health), a "save battery" power-saver profile, a daily screen-time limit reminder, overheating and storage-full alerts, charging-time estimate, "share my phone report", password generator, coin flip and dice, "days until Christmas". |
 | **Daily health notification** | Once a day, the offline checkup's score and top issues, no API calls. |
 
 ## Install on the phone

@@ -28,7 +28,13 @@ class OfflineBrain(private val ctx: Context, host: Host) {
             return
         }
         // Instant answers that need no tool.
-        val quick = Calc.tryAnswer(text) ?: Units.tryAnswer(text) ?: Clock.tryAnswer(text)
+        val quick = Calc.tryAnswer(text) ?: Units.tryAnswer(text) ?: Handy.daysUntil(text) ?: Clock.tryAnswer(text)
+            ?: when {
+                Regex("\\b(flip a coin|coin flip|toss a coin|heads or tails)\\b").containsMatchIn(lower) -> Handy.coin()
+                Regex("\\b(roll (a |the |two |2 )?di(c)?e|dice roll)\\b").containsMatchIn(lower) ->
+                    Handy.dice(if (Regex("\\b(two|2) di").containsMatchIn(lower)) 2 else 1)
+                else -> null
+            }
             ?: if (Regex("^(how|where)\\b").containsMatchIn(lower) || "boot" in lower) TecnoGuide.tryAnswer(text) else null
         if (quick != null) {
             onEvent(Agent.Event.Reply(quick))
@@ -70,6 +76,24 @@ class OfflineBrain(private val ctx: Context, host: Host) {
         // Reminders keep their whole text ("remind me to buy milk and eggs in 2 hours").
         if (Regex("\\bremind me\\b").containsMatchIn(lower)) return listOfNotNull(reminder(lower, original))
         safeMode(lower)?.let { return listOf(it) }
+        if (Regex("\\b(good (morning|afternoon|evening)|brief me|briefing|morning summary|daily summary|what'?s up)\\b").containsMatchIn(lower)) {
+            return listOf(Step("briefing"))
+        }
+        if (Regex("\\b(power sav(er|ing) (profile|mode)|save (my )?battery|battery saving mode|make (my )?battery last)\\b").containsMatchIn(lower)) {
+            return listOf(Step("power_saver_profile", title = "Power saver"))
+        }
+        Regex("\\b(?:screen ?time|phone) (?:limit|alert)\\b.*?(\\d+(?:\\.\\d+)?)\\s*(hours?|hrs?|h|minutes?|mins?)|\\blimit (?:my )?screen ?time (?:to )?(\\d+(?:\\.\\d+)?)\\s*(hours?|hrs?|h|minutes?|mins?)").find(lower)?.let {
+            val n = (it.groupValues[1].ifEmpty { it.groupValues[3] }).toDouble()
+            val unit = it.groupValues[2].ifEmpty { it.groupValues[4] }
+            return listOf(Step("screen_time_limit", mapOf("minutes" to (if (unit.startsWith("h")) n * 60 else n).toInt())))
+        }
+        if (Regex("\\b(screen ?time|phone) limit (off|none)|(remove|turn off|stop) (the )?screen ?time limit").containsMatchIn(lower)) {
+            return listOf(Step("screen_time_limit", mapOf("minutes" to 0)))
+        }
+        if (Regex("\\b(share|send) (my |the |a )?(phone |health )?report\\b").containsMatchIn(lower)) return listOf(Step("share_report"))
+        Regex("\\b(?:generate|make|create|new|give me) (?:a |me a )?(?:strong |random )?password(?: of)?\\s*(\\d+)?").find(lower)?.let {
+            return listOf(Step("generate_password", mapOf("length" to (it.groupValues[1].toIntOrNull() ?: 16))))
+        }
         Regex("^(?:block|ban)\\s+(?:the\\s+)?(?:site|website)?\\s*([a-z0-9-]+(?:\\.[a-z0-9-]+)+)").find(lower.trim())?.let {
             return listOf(Step("block_site", mapOf("site" to it.groupValues[1])))
         }
@@ -324,6 +348,8 @@ class OfflineBrain(private val ctx: Context, host: Host) {
             - "note buy bread" · "my notes" · "delete note 2"
             - "15% of 2400" · "5 km to miles" · "what time is it"
             - "how do I take a screenshot?" and other Tecno how-tos
+            - "good morning" · "save battery" · "screen time limit 3 hours"
+            - "share my phone report" · "make a password" · "flip a coin" · "days until christmas"
             Combine them: "brightness 20, dnd on and alarm at 6".
         """.trimIndent()
     }

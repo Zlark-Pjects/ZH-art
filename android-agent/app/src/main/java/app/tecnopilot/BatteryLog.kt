@@ -45,6 +45,19 @@ object BatteryLog {
         return if (hours >= 0.5) drop / hours else null
     }
 
+    /** %/hour while charging, from consecutive charging samples. */
+    private fun chargeRate(s: List<Sample>): Double? {
+        var gain = 0.0
+        var hours = 0.0
+        for ((a, b) in s.zipWithNext()) {
+            val h = (b.at - a.at) / 3_600_000.0
+            if (!a.charging || !b.charging || h <= 0 || h > 1.0 || b.level >= 100) continue
+            gain += (b.level - a.level).coerceAtLeast(0)
+            hours += h
+        }
+        return if (hours >= 0.25 && gain > 0) gain / hours else null
+    }
+
     fun report(ctx: Context): String {
         val b = DeviceInfo.battery(ctx)
         val s = read(ctx)
@@ -60,6 +73,13 @@ object BatteryLog {
                 drainRate(s, null)?.let { r ->
                     appendLine(String.format(Locale.US, "Average drain on battery: %.1f%% per hour", r))
                     if (!b.charging && r > 0) appendLine("At that rate ${b.level}% lasts about ${duration((b.level / r * 3_600_000).toLong())}.")
+                }
+                chargeRate(s)?.let { r ->
+                    appendLine(String.format(Locale.US, "Charging speed: about %.0f%% per hour", r))
+                    if (b.charging && b.level < 100 && r > 0) {
+                        val target = prefs.chargeLimit.takeIf { it > b.level } ?: 100
+                        appendLine("Reaches $target% in about ${duration(((target - b.level) / r * 3_600_000).toLong())}.")
+                    }
                 }
                 drainRate(s, true)?.let { appendLine(String.format(Locale.US, " - screen on: %.1f%%/h", it)) }
                 drainRate(s, false)?.let {

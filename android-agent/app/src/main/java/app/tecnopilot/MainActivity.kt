@@ -222,6 +222,8 @@ class MainActivity : Activity(), Host {
             "📶 Internet speed" to "Test my internet speed and tell me if something is wrong.",
             "🔔 What did I miss?" to "Summarise the notifications I missed in the last few hours.",
             "🌙 Night mode" to "Set me up for the night: brightness low, Do Not Disturb on, and an alarm at 6:30.",
+            "☀️ Good morning" to "Good morning",
+            "🔋 Save battery" to "Save battery",
             "🛡 Block adult content" to "Turn on Safe mode to block porn and adult content.",
             "📊 Data usage" to "What's using my mobile data this month?",
         ).forEach { (label, prompt) ->
@@ -385,6 +387,8 @@ class MainActivity : Activity(), Host {
             "📊 Data usage" to { DataUsage.report(this, 0, "mobile") },
             "📦 Biggest apps" to { AppSizes.largest(this, 12) },
             "📝 Notes" to { Notes.list(this) },
+            "☀️ Briefing" to { Briefing.build(this) },
+            "🔑 Password" to { Handy.password(16) },
         )
         actions.chunked(2).forEach { pair ->
             val r = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
@@ -533,12 +537,21 @@ class MainActivity : Activity(), Host {
             limits.addView(radio(if (v == 0) "off" else "$v%", 300 + i, prefs.chargeLimit == v))
         }
         limits.setOnCheckedChangeListener { _, checked -> prefs.chargeLimit = listOf(0, 80, 85, 90)[checked - 300] }
+        val screenLimits = listOf(0, 120, 180, 240, 360)
+        val screenGroup = RadioGroup(this).apply { orientation = RadioGroup.HORIZONTAL }
+        screenLimits.forEachIndexed { i, v ->
+            screenGroup.addView(radio(if (v == 0) "off" else "${v / 60}h", 500 + i, prefs.screenLimitMin == v))
+        }
+        screenGroup.setOnCheckedChangeListener { _, checked -> prefs.screenLimitMin = screenLimits[checked - 500] }
         col.addView(card(
             text("Habits", 16f, bold = true),
             switch("Read replies aloud", prefs.speakReplies) { prefs.speakReplies = it },
             switch("Daily health notification", prefs.dailyCheckup) { prefs.dailyCheckup = it },
             text("Charge alert: tell me to unplug at", 14f).apply { layoutParams = lp(top = dp(8)) },
             limits,
+            text("Daily screen-time reminder after", 14f).apply { layoutParams = lp(top = dp(8)) },
+            screenGroup,
+            text("Pilot also warns you once a day if the phone overheats or storage is almost full.", 12f, C.SUB),
         ), lp(top = dp(12)))
 
         permBox = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }

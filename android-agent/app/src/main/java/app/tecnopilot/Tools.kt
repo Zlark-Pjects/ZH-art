@@ -283,6 +283,40 @@ object Tools {
                 }
             },
             ToolSpec(
+                "briefing",
+                "A short summary of the phone and the day: battery, storage, notes, missed notifications, health score. " +
+                    "Call for 'good morning', 'brief me' or 'what's up with my phone'.",
+                emptyList(), "Preparing your briefing",
+            ) { Briefing.build(ctx) },
+            ToolSpec(
+                "power_saver_profile",
+                "Applies a battery-saving profile: brightness 30%, 30 s screen timeout, then opens Battery saver.",
+                emptyList(), "Saving power",
+            ) { PowerSaver.apply(ctx, host) },
+            ToolSpec(
+                "screen_time_limit",
+                "Sets a daily screen-time limit; Pilot notifies once when it's reached. 0 turns it off.",
+                listOf(Param("minutes", "integer", "Daily limit in minutes, e.g. 180.", required = true)), "Setting the limit",
+            ) { a ->
+                val m = a.int("minutes", 0).coerceIn(0, 24 * 60)
+                prefs.screenLimitMin = m
+                if (m == 0) "Screen-time limit off." else "I'll remind you when you pass ${duration(m * 60_000L)} of screen time in a day." +
+                    if (!Apps.hasUsageAccess(ctx)) " (Allow Usage access in Setup for this to work.)" else ""
+            },
+            ToolSpec(
+                "share_report",
+                "Opens the share sheet with a full phone report (checkup + battery + storage), e.g. to send to a repair shop or friend.",
+                emptyList(), "Preparing the report",
+            ) {
+                val text = "Tecno Pilot phone report\n\n" + Checkup.describe(Checkup.run(ctx)) + "\n\n" + BatteryLog.report(ctx) + "\n\n" + StorageScan.report(ctx)
+                Controls.open(host, "share", text)
+            },
+            ToolSpec(
+                "generate_password",
+                "Creates a strong random password on the phone.",
+                listOf(Param("length", "integer", "Default 16.")), "Making a password",
+            ) { a -> Handy.password(a.int("length", 16)) },
+            ToolSpec(
                 "remember",
                 "Saves a short fact about the user or their preferences for future chats (\"prefers short answers\", \"uses WhatsApp Business\").",
                 listOf(Param("fact", "string", "One short sentence.", required = true)), "Remembering",
