@@ -21,6 +21,11 @@ class Prefs(context: Context) {
         get() = sp.getString("effort", "medium") ?: "medium"
         set(v) = sp.edit().putString("effort", v).apply()
 
+    /** "auto" uses Claude when there's internet and a key, otherwise the on-device brain. */
+    var mode: String
+        get() = sp.getString("mode", "auto") ?: "auto"
+        set(v) = sp.edit().putString("mode", v).apply()
+
     var speakReplies: Boolean
         get() = sp.getBoolean("speak", false)
         set(v) = sp.edit().putBoolean("speak", v).apply()
@@ -53,5 +58,10 @@ class Prefs(context: Context) {
             "claude-haiku-5-5" to "Haiku 5.5 · cheapest and quickest",
         )
         val EFFORTS = listOf("low", "medium", "high")
+        val MODES = listOf(
+            "auto" to "Auto · Claude when online, on-device when not",
+            "online" to "Online only · always Claude",
+            "offline" to "Offline only · on-device, nothing leaves the phone",
+        )
     }
 }

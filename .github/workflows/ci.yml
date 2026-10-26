@@ -2,7 +2,13 @@ name: CI
 
 on:
   push:
+    paths-ignore:
+      - "android-agent/**"
+      - ".github/workflows/android-agent.yml"
   pull_request:
+    paths-ignore:
+      - "android-agent/**"
+      - ".github/workflows/android-agent.yml"
 
 concurrency:
   group: ci-${{ github.ref }}

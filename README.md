@@ -69,7 +69,3 @@ src/lib/                           Save-file helper, zip writer, score synth, so
 ```
 
 The live stage and the exporter draw from the same scene model (`sceneModel.ts`) and timeline maths (`timeline.ts`), so an export matches the preview: cast, grade, transitions and text included.
-
-## Also in this repo: Tecno Pilot (Android)
-
-`android-agent/` holds **Tecno Pilot**, a separate Android app: a Claude-powered agent and offline phone doctor for Tecno/HiOS phones. See [android-agent/README.md](android-agent/README.md). It shares no code with the studio.

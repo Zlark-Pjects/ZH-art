@@ -2,6 +2,15 @@
 
 An Android app that looks after a budget Tecno phone (built with the Spark/Pop/BG6i class in mind: HiOS, 3–4 GB RAM, eMMC storage). You chat with **Pilot**, a Claude agent that can measure the phone and act on it, and there's an offline **Phone Doctor** that works without an API key.
 
+## Online and offline
+
+Pilot has two brains, and the badge at the top of the screen shows which one is answering:
+
+- **Online (Claude):** used when there's internet and an API key. Answers any question, explains in depth, chains many tools, and can search the web.
+- **Offline (on the phone):** used with no internet, no key, or when Claude can't be reached. It understands phone commands, runs the same tools, and nothing leaves the phone. For example: "checkup", "why is my phone slow?", "free up space", "duplicate photos" → "delete them", "battery", "unused apps", "bloatware", "speed test", "what did I miss?", "brightness 30%", "flashlight on", "silent", "dnd on", "alarm at 6:30", "timer 10 minutes", "remind me in 20 minutes to call mum", "open WhatsApp", "open wifi settings", "night mode". You can combine commands: "brightness 20, dnd on and alarm at 6".
+
+Setup › Online / offline chooses **Auto** (the default: Claude when online, on the phone otherwise), **Online only**, or **Offline only** (nothing is ever sent).
+
 ## What it does
 
 | | |
@@ -21,7 +30,7 @@ An Android app that looks after a budget Tecno phone (built with the Spark/Pop/B
 
 1. Get the APK: open the **Tecno Pilot APK** workflow run in this repo's GitHub Actions and download the `TecnoPilot-apk` artifact (or build it yourself, below).
 2. On the phone, open the APK and allow "Install unknown apps" for your browser or file manager when asked.
-3. Open Tecno Pilot › **Setup**: paste a Claude API key (from console.anthropic.com › API keys) and tap **Allow** on each permission you want. Every permission unlocks one tool; the app still works without them.
+3. Open Tecno Pilot. It works offline straight away. For online answers, go to **Setup** and paste a Claude API key (from console.anthropic.com › API keys). Tap **Allow** on each permission you want; every permission unlocks one tool, and the app still works without them.
 4. HiOS stops background apps aggressively. For the battery diary and charge alert, allow **Ignore battery optimisation** in Setup and allow auto-start for Tecno Pilot in **Phone Master**.
 
 The chat uses your API key and is billed to your Anthropic account. Setup lets you pick the model: Opus 5.5 (default, smartest), Sonnet 5.5, or Haiku 5.5 (cheapest). You can also set the thinking effort. The Doctor tab, the background checks and the alerts never call the API.
@@ -45,7 +54,8 @@ CI (`.github/workflows/android-agent.yml`) builds it on every push that touches 
 
 ```
 app/src/main/java/app/tecnopilot/
-  Agent.kt              Claude tool loop (Anthropic Java SDK), system prompt with Tecno know-how
+  Agent.kt              Claude tool loop (Anthropic Java SDK), Tecno know-how; picks online or offline
+  OfflineBrain.kt       On-device command understanding: same tools, no internet
   Tools.kt              The tool catalogue: names, descriptions, input schemas, handlers
   MainActivity.kt       Pilot chat, Doctor dashboard, Setup; system dialogs for delete/uninstall
   Checkup.kt            Offline health score and issue list

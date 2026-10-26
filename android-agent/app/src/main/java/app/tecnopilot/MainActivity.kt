@@ -10,6 +10,9 @@ import android.content.ClipboardManager
 import android.content.Intent
 import android.content.IntentSender
 import android.content.pm.PackageManager
+import android.net.ConnectivityManager
+import android.net.Network as AndroidNetwork
+import android.net.NetworkCapabilities
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
@@ -87,7 +90,8 @@ class MainActivity : Activity(), Host {
         setContentView(root)
         applyInsets(root)
 
-        show(if (prefs.apiKey.isBlank()) 2 else 0)
+        show(0)
+        watchNetwork()
         PilotJobService.schedule(this)
         worker.execute { runCatching { BatteryLog.record(this) } }
         if (Build.VERSION.SDK_INT >= 33 &&
@@ -98,9 +102,11 @@ class MainActivity : Activity(), Host {
     override fun onResume() {
         super.onResume()
         refreshPermissions()
+        refreshMode()
     }
 
     override fun onDestroy() {
+        netCallback?.let { runCatching { getSystemService(ConnectivityManager::class.java).unregisterNetworkCallback(it) } }
         tts?.shutdown()
         worker.shutdownNow()
         super.onDestroy()
@@ -121,11 +127,40 @@ class MainActivity : Activity(), Host {
         }
     }
 
-    private fun header() = LinearLayout(this).apply {
-        orientation = LinearLayout.VERTICAL
-        setPadding(dp(18), dp(14), dp(18), dp(8))
-        addView(text("Tecno Pilot", 22f, bold = true))
-        addView(text("${Build.MANUFACTURER} ${Build.MODEL} · Android ${Build.VERSION.RELEASE}", 13f, C.SUB))
+    private lateinit var modeBadge: TextView
+    private var netCallback: ConnectivityManager.NetworkCallback? = null
+
+    private fun header(): View {
+        modeBadge = text("", 12f, bold = true).apply {
+            setPadding(dp(10), dp(4), dp(10), dp(4))
+            setOnClickListener { show(2) }
+        }
+        val titles = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            addView(text("Tecno Pilot", 22f, bold = true))
+            addView(text("${Build.MANUFACTURER} ${Build.MODEL} · Android ${Build.VERSION.RELEASE}", 13f, C.SUB))
+        }
+        titles.layoutParams = lp(w = 0, weight = 1f)
+        return row(titles, modeBadge).apply { setPadding(dp(18), dp(14), dp(18), dp(8)) }
+    }
+
+    /** Shows which brain will answer: Claude (online) or the on-device one (offline). */
+    private fun refreshMode() {
+        if (!::modeBadge.isInitialized) return
+        val claude = agent.usesClaude()
+        modeBadge.text = if (claude) "● Online · Claude" else "● Offline · on phone"
+        modeBadge.setTextColor(if (claude) C.ACCENT_INK else C.BG)
+        modeBadge.background = rounded(this, if (claude) C.ACCENT else C.WARN, 14)
+    }
+
+    private fun watchNetwork() {
+        val cb = object : ConnectivityManager.NetworkCallback() {
+            override fun onCapabilitiesChanged(n: AndroidNetwork, c: NetworkCapabilities) { ui.post { refreshMode() } }
+            override fun onLost(n: AndroidNetwork) { ui.postDelayed({ refreshMode() }, 500) }
+        }
+        runCatching { getSystemService(ConnectivityManager::class.java).registerDefaultNetworkCallback(cb) }
+            .onSuccess { netCallback = cb }
+        refreshMode()
     }
 
     private fun tabBar(): View {
@@ -166,7 +201,9 @@ class MainActivity : Activity(), Host {
 
         bubble(
             "Hi! I'm Pilot. I can check your phone's health, free up storage, find apps you never use, " +
-                "track battery drain, test your internet and change settings for you. What should we fix first?",
+                "track battery drain, test your internet and change settings for you. What should we fix first?\n\n" +
+                "I work online (Claude, for any question) and offline (on the phone, for phone commands). " +
+                "The badge at the top shows which one is answering.",
             mine = false,
         )
 
@@ -260,6 +297,7 @@ class MainActivity : Activity(), Host {
             bubble("Started a fresh conversation.", mine = false)
             return
         }
+        refreshMode()
         thinking = true
         sendBtn.isEnabled = false
         setBusy("Thinking")
@@ -443,15 +481,26 @@ class MainActivity : Activity(), Host {
         }
         col.addView(card(
             text("Claude API key", 16f, bold = true),
-            text("Pilot's chat runs on Claude. Create a key at console.anthropic.com › API keys and paste it here. It stays on this phone.", 13f, C.SUB),
+            text("Needed only for online mode. Create a key at console.anthropic.com › API keys and paste it here. It stays on this phone.", 13f, C.SUB),
             key.apply { layoutParams = lp(top = dp(10)) },
             button("Save key") {
                 prefs.apiKey = key.text.toString()
                 agent.reset()
                 toast(if (prefs.apiKey.isBlank()) "Key removed" else "Saved. Say hi to Pilot!")
+                refreshMode()
                 if (prefs.apiKey.isNotBlank()) show(0)
             }.apply { layoutParams = lp(top = dp(10)) },
         ))
+
+        val modes = RadioGroup(this)
+        Prefs.MODES.forEachIndexed { i, (id, label) -> modes.addView(radio(label, 400 + i, id == prefs.mode)) }
+        modes.setOnCheckedChangeListener { _, checked -> prefs.mode = Prefs.MODES[checked - 400].first; refreshMode() }
+        col.addView(card(
+            text("Online / offline", 16f, bold = true),
+            text("Offline, Pilot understands phone commands (checkup, clean up, battery, brightness, alarms, open apps…) " +
+                "and everything stays on the phone. Online, Claude answers anything and explains in depth.", 13f, C.SUB),
+            modes,
+        ), lp(top = dp(12)))
 
         val models = RadioGroup(this)
         Prefs.MODELS.forEachIndexed { i, (id, label) ->

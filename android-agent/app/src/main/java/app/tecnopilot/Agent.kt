@@ -37,6 +37,14 @@ class Agent(private val ctx: Context, host: Host) {
     private val prefs = Prefs(ctx)
     private val tools = Tools.all(ctx, host)
     private val byName = tools.associateBy { it.name }
+    private val offline = OfflineBrain(ctx, host)
+
+    /** Which brain answers the next message: true for Claude, false for the on-device one. */
+    fun usesClaude(): Boolean = when (prefs.mode) {
+        "offline" -> false
+        "online" -> true
+        else -> prefs.apiKey.isNotBlank() && Network.isOnline(ctx)
+    }
     private val history = ArrayList<MessageParam>()
     private var client: AnthropicClient? = null
     private var clientKey = ""
@@ -88,8 +96,12 @@ class Agent(private val ctx: Context, host: Host) {
 
     /** Runs one user turn to completion on the calling (background) thread. */
     fun send(text: String, onEvent: (Event) -> Unit) = synchronized(history) {
+        if (!usesClaude()) {
+            offline.handle(text, onEvent)
+            return
+        }
         if (prefs.apiKey.isBlank()) {
-            onEvent(Event.Problem("Add your Anthropic API key in the Setup tab to chat. The Doctor tab works without one."))
+            onEvent(Event.Problem("Online mode needs a Claude API key (Setup tab). Switch to Auto or Offline to use Pilot without one."))
             return
         }
         val mark = history.size
@@ -152,7 +164,10 @@ class Agent(private val ctx: Context, host: Host) {
             onEvent(Event.Problem("Stopped after many steps. Ask again to keep going."))
         } catch (e: Exception) {
             while (history.size > mark) history.removeAt(history.size - 1)
-            onEvent(Event.Problem(explain(e)))
+            if (e is AnthropicIoException && prefs.mode == "auto") {
+                onEvent(Event.Problem("Couldn't reach Claude, so I answered on the phone instead."))
+                offline.handle(text, onEvent)
+            } else onEvent(Event.Problem(explain(e)))
         }
     }
 
