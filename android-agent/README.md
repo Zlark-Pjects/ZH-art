@@ -7,7 +7,7 @@ An Android app that looks after a budget Tecno phone (built with the Spark/Pop/B
 Pilot has two brains, and the badge at the top of the screen shows which one is answering:
 
 - **Online (Claude):** used when there's internet and an API key. Answers any question, explains in depth, chains many tools, and can search the web.
-- **Offline (on the phone):** used with no internet, no key, or when Claude can't be reached. It understands phone commands, runs the same tools, and nothing leaves the phone. For example: "checkup", "why is my phone slow?", "free up space", "duplicate photos" → "delete them", "battery", "unused apps", "bloatware", "speed test", "what did I miss?", "brightness 30%", "flashlight on", "silent", "dnd on", "alarm at 6:30", "timer 10 minutes", "remind me in 20 minutes to call mum", "open WhatsApp", "open wifi settings", "night mode". You can combine commands: "brightness 20, dnd on and alarm at 6".
+- **Offline (on the phone):** used with no internet, no key, or when Claude can't be reached. It understands phone commands, runs the same tools, and nothing leaves the phone. For example: "checkup", "why is my phone slow?", "free up space", "duplicate photos" → "delete them", "battery", "unused apps", "bloatware", "speed test", "what did I miss?", "brightness 30%", "flashlight on", "silent", "dnd on", "alarm at 6:30", "timer 10 minutes", "remind me in 20 minutes to call mum", "open WhatsApp", "open wifi settings", "night mode", "block porn", "what's using my data?", "note pay bill", "15% of 2400", "5 km to miles", "how do I take a screenshot?". You can combine commands: "brightness 20, dnd on and alarm at 6".
 
 Setup › Online / offline chooses **Auto** (the default: Claude when online, on the phone otherwise), **Online only**, or **Offline only** (nothing is ever sent).
 
@@ -24,6 +24,10 @@ Setup › Online / offline chooses **Auto** (the default: Claude when online, on
 | **Network** | Connection check (does the internet actually work, Wi-Fi signal and band) and a speed test (25 MB on Wi-Fi, 5 MB on mobile data). |
 | **Notification digest** | "What did I miss?" — Pilot summarises recent notifications (kept in memory only). |
 | **Controls** | Brightness, screen timeout, volume, ringer, Do Not Disturb, flashlight, alarms, timers, reminders, opening apps by name, settings pages, web/maps/dialer/SMS/share. |
+| **🛡 Safe mode** | Blocks pornographic and adult sites in every browser and app, and keeps Google, Bing and YouTube in safe mode (SafeSearch / Restricted Mode). Turn it on in Setup or say "block porn". A **PIN** stops it being turned off (Pilot itself can't turn it off when a PIN is set), **Always-on VPN** stops it being disabled from Settings, it comes back after a restart, and you can add your own sites ("block site tiktok.com"). How it works: it uses Android's VPN slot for web-address lookups only. Adult domains are refused on the phone (a built-in list plus name patterns), and other lookups go to CleanBrowsing's free Family filter. Your other traffic never passes through the app. |
+| **Data usage** | Which apps used your mobile data or Wi-Fi this month. |
+| **Notes & to-dos** | "note buy bread", "my notes", "delete note 2", kept on the phone. |
+| **Offline extras** | Calculator ("15% of 2400"), unit converter ("5 km to miles", "2 GB to MB", "100 F in C"), time and date, the biggest apps, and a built-in Tecno/HiOS how-to guide (screenshots, Memory Fusion, developer options, hotspot, app lock, factory reset, safe-mode boot, IMEI, backups, overheating…). |
 | **Daily health notification** | Once a day, the offline checkup's score and top issues, no API calls. |
 
 ## Install on the phone
@@ -58,6 +62,9 @@ app/src/main/java/app/tecnopilot/
   OfflineBrain.kt       On-device command understanding: same tools, no internet
   Tools.kt              The tool catalogue: names, descriptions, input schemas, handlers
   MainActivity.kt       Pilot chat, Doctor dashboard, Setup; system dialogs for delete/uninstall
+  ContentFilter.kt      Safe mode: DNS-only VPN, adult-site blocklist, family resolver, PIN
+  Extras.kt             Data usage, biggest apps, notes, calculator, unit converter, Tecno how-to guide
+  BootReceiver.kt       Restores Safe mode and background checks after a restart
   Checkup.kt            Offline health score and issue list
   DeviceInfo.kt         RAM, storage, battery, thermal, uptime, screen and animation settings
   StorageScan.kt        MediaStore scans: big files, duplicates, screenshots, folder sizes

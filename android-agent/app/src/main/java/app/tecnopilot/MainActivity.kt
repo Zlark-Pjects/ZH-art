@@ -92,6 +92,9 @@ class MainActivity : Activity(), Host {
 
         show(0)
         watchNetwork()
+        if (prefs.filterWanted && !ContentFilter.active && ContentFilter.consentIntent(this) == null) {
+            runCatching { ContentFilter.start(this) }
+        }
         PilotJobService.schedule(this)
         worker.execute { runCatching { BatteryLog.record(this) } }
         if (Build.VERSION.SDK_INT >= 33 &&
@@ -103,6 +106,7 @@ class MainActivity : Activity(), Host {
         super.onResume()
         refreshPermissions()
         refreshMode()
+        refreshSafeMode()
     }
 
     override fun onDestroy() {
@@ -218,6 +222,8 @@ class MainActivity : Activity(), Host {
             "📶 Internet speed" to "Test my internet speed and tell me if something is wrong.",
             "🔔 What did I miss?" to "Summarise the notifications I missed in the last few hours.",
             "🌙 Night mode" to "Set me up for the night: brightness low, Do Not Disturb on, and an alarm at 6:30.",
+            "🛡 Block adult content" to "Turn on Safe mode to block porn and adult content.",
+            "📊 Data usage" to "What's using my mobile data this month?",
         ).forEach { (label, prompt) ->
             chips.addView(text(label, 13f).apply {
                 background = rounded(context, C.CARD2, 18, C.LINE)
@@ -375,6 +381,10 @@ class MainActivity : Activity(), Host {
             "🔔 Notifications" to { NotificationCatcher.recent(this, 240, 30) },
             "📋 Vital signs" to { DeviceInfo.describe(DeviceInfo.read(this)) },
             "🔦 Flashlight" to { Controls.flashlight(this, !torchOn).also { torchOn = !torchOn } },
+            "🛡 Safe mode" to { ContentFilter.status(this) },
+            "📊 Data usage" to { DataUsage.report(this, 0, "mobile") },
+            "📦 Biggest apps" to { AppSizes.largest(this, 12) },
+            "📝 Notes" to { Notes.list(this) },
         )
         actions.chunked(2).forEach { pair ->
             val r = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
@@ -502,6 +512,8 @@ class MainActivity : Activity(), Host {
             modes,
         ), lp(top = dp(12)))
 
+        col.addView(safeModeCard(), lp(top = dp(12)))
+
         val models = RadioGroup(this)
         Prefs.MODELS.forEachIndexed { i, (id, label) ->
             models.addView(radio(label, 100 + i, id == prefs.model))
@@ -546,6 +558,89 @@ class MainActivity : Activity(), Host {
             }.apply { layoutParams = lp(top = dp(10)) },
         ), lp(top = dp(12)))
         return ScrollView(this).apply { addView(col) }
+    }
+
+    // ---- Safe mode ------------------------------------------------------------------------------
+
+    private lateinit var safeStatus: TextView
+    private lateinit var safeToggle: TextView
+    private lateinit var pinButton: TextView
+
+    private fun safeModeCard(): View {
+        safeStatus = text("", 13f, C.SUB)
+        safeToggle = button("Turn on", primary = true) { toggleSafeMode() }
+        pinButton = button("Set PIN", primary = false) { askPin(set = true) {} }
+        val always = button("Always-on VPN", primary = false) {
+            launch(Intent(Settings.ACTION_VPN_SETTINGS))
+            toast("Tap Tecno Pilot › turn on 'Always-on VPN' and 'Block connections without VPN'")
+        }
+        val dns = button("Private DNS backup", primary = false) {
+            getSystemService(ClipboardManager::class.java)
+                .setPrimaryClip(ClipData.newPlainText("Private DNS", ContentFilter.PRIVATE_DNS_HOST))
+            toast("Copied. Choose 'Private DNS provider hostname' and paste")
+            if (!launch(Intent("android.settings.PRIVATE_DNS_SETTINGS"))) launch(Intent(Settings.ACTION_WIRELESS_SETTINGS))
+        }
+        val c = card(
+            text("🛡 Safe mode", 16f, bold = true),
+            text("Blocks pornographic and adult sites in every browser and app, and keeps Google, Bing and YouTube in safe mode. " +
+                "Works through Android's VPN slot, but only web addresses are checked; your other traffic doesn't pass through Pilot.", 13f, C.SUB),
+            safeStatus.apply { layoutParams = lp(top = dp(8)) },
+            row(safeToggle, pinButton.apply { layoutParams = LinearLayout.LayoutParams(-2, -2).apply { leftMargin = dp(8) } })
+                .apply { layoutParams = lp(top = dp(10)) },
+            row(always, dns.apply { layoutParams = LinearLayout.LayoutParams(-2, -2).apply { leftMargin = dp(8) } })
+                .apply { layoutParams = lp(top = dp(8)) },
+            text("Extra protection: 'Always-on VPN' stops it being switched off from Settings; 'Private DNS backup' sets a family filter in Android itself.", 12f, C.SUB)
+                .apply { layoutParams = lp(top = dp(8)) },
+        )
+        refreshSafeMode()
+        return c
+    }
+
+    private fun refreshSafeMode() {
+        if (!::safeStatus.isInitialized) return
+        val on = ContentFilter.active
+        safeStatus.text = if (on) "● ON · ${ContentFilter.blockedCount.get()} blocked since it started" else "○ Off"
+        safeStatus.setTextColor(if (on) C.ACCENT else C.SUB)
+        safeToggle.text = if (on) "Turn off" else "Turn on"
+        pinButton.text = if (prefs.filterPinHash.isEmpty()) "Set PIN" else "Change PIN"
+    }
+
+    private fun toggleSafeMode() {
+        if (!ContentFilter.active) {
+            worker.execute {
+                val msg = ContentFilter.turnOn(this, this)
+                ui.post { refreshSafeMode(); toast(if (ContentFilter.active) "Safe mode on" else msg) }
+            }
+            return
+        }
+        val off = { ContentFilter.stop(this); ui.postDelayed({ refreshSafeMode() }, 400); toast("Safe mode off") }
+        if (prefs.filterPinHash.isEmpty()) off() else askPin(set = false) { off() }
+    }
+
+    /** set=true: choose a new PIN (asking for the old one first if there is one). set=false: check the PIN. */
+    private fun askPin(set: Boolean, onOk: () -> Unit) = askPin(set, prefs.filterPinHash.isNotEmpty(), onOk)
+
+    private fun askPin(set: Boolean, needOld: Boolean, onOk: () -> Unit) {
+        val field = EditText(this).apply {
+            inputType = InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_VARIATION_PASSWORD
+            hint = if (set && !needOld) "New PIN (4+ digits)" else "PIN"
+            setTextColor(C.TEXT); setHintTextColor(C.SUB)
+        }
+        android.app.AlertDialog.Builder(this)
+            .setTitle(if (set && !needOld) "Choose a Safe mode PIN" else "Enter Safe mode PIN")
+            .setView(field)
+            .setPositiveButton("OK") { _, _ ->
+                val pin = field.text.toString()
+                when {
+                    !set || needOld -> if (ContentFilter.hashPin(pin) == prefs.filterPinHash) {
+                        if (set) askPin(set = true, needOld = false, onOk) else onOk()
+                    } else toast("Wrong PIN")
+                    pin.length < 4 -> toast("Use at least 4 digits")
+                    else -> { prefs.filterPinHash = ContentFilter.hashPin(pin); toast("PIN set"); refreshSafeMode(); onOk() }
+                }
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
     }
 
     private fun radio(label: String, id: Int, checked: Boolean) = RadioButton(this).apply {
@@ -648,6 +743,21 @@ class MainActivity : Activity(), Host {
             try {
                 startIntentSenderForResult(sender, REQ_CONFIRM, null, 0, 0, 0)
             } catch (e: IntentSender.SendIntentException) {
+                latch.countDown()
+            }
+        }
+        latch.await(5, TimeUnit.MINUTES)
+        return confirmResult
+    }
+
+    override fun launchForResult(intent: Intent): Boolean {
+        val latch = CountDownLatch(1)
+        confirmLatch = latch
+        confirmResult = false
+        ui.post {
+            try {
+                startActivityForResult(intent, REQ_CONFIRM)
+            } catch (e: ActivityNotFoundException) {
                 latch.countDown()
             }
         }

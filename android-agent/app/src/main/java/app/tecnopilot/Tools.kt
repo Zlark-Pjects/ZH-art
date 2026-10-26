@@ -238,6 +238,51 @@ object Tools {
                 ), "Opening",
             ) { a -> Controls.open(host, a.str("target", "search"), a.str("value")) },
             ToolSpec(
+                "safe_mode",
+                "Safe mode blocks pornographic and adult websites in every browser and app on the phone and forces " +
+                    "SafeSearch on Google/Bing and Restricted Mode on YouTube. Use action=on when the user wants adult " +
+                    "content blocked (for themselves or a child), status to report, off to disable (refused when a PIN is set).",
+                listOf(Param("action", "string", "What to do.", required = true, enum = listOf("on", "off", "status"))), "Updating Safe mode",
+            ) { a ->
+                when (a.str("action", "status")) {
+                    "on" -> ContentFilter.turnOn(ctx, host)
+                    "off" -> ContentFilter.turnOff(ctx)
+                    else -> ContentFilter.status(ctx)
+                }
+            },
+            ToolSpec(
+                "block_site",
+                "Adds a website to the Safe mode blocklist (e.g. a site the user finds distracting or inappropriate).",
+                listOf(Param("site", "string", "Domain such as example.com.", required = true)), "Blocking the site",
+            ) { a -> ContentFilter.blockSite(ctx, a.str("site")) },
+            ToolSpec(
+                "data_usage",
+                "Which apps used the most mobile data or Wi-Fi. Call when the user's data runs out fast or asks what uses data.",
+                listOf(
+                    Param("days", "integer", "0 for this month (default), or the last N days."),
+                    Param("network", "string", "Default mobile.", enum = listOf("mobile", "wifi", "both")),
+                ), "Reading data usage",
+            ) { a -> DataUsage.report(ctx, a.int("days", 0), a.str("network", "mobile")) },
+            ToolSpec(
+                "largest_apps",
+                "Installed apps ranked by how much storage they use (app + data).",
+                listOf(Param("limit", "integer", "Default 12.")), "Measuring apps",
+            ) { a -> AppSizes.largest(ctx, a.int("limit", 12)) },
+            ToolSpec(
+                "notes",
+                "The user's notes and to-do list stored on the phone: add one, list them, or remove by number, words or 'all'.",
+                listOf(
+                    Param("action", "string", "What to do.", required = true, enum = listOf("add", "list", "remove")),
+                    Param("text", "string", "The note to add, or which to remove (number, words or 'all')."),
+                ), "Updating notes",
+            ) { a ->
+                when (a.str("action", "list")) {
+                    "add" -> Notes.add(ctx, a.str("text"))
+                    "remove" -> Notes.remove(ctx, a.str("text", "all"))
+                    else -> Notes.list(ctx)
+                }
+            },
+            ToolSpec(
                 "remember",
                 "Saves a short fact about the user or their preferences for future chats (\"prefers short answers\", \"uses WhatsApp Business\").",
                 listOf(Param("fact", "string", "One short sentence.", required = true)), "Remembering",

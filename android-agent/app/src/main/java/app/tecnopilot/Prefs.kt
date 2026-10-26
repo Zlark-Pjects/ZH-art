@@ -51,6 +51,29 @@ class Prefs(context: Context) {
         }
         set(v) = sp.edit().putString("memories", JSONArray(v).toString()).apply()
 
+    /** Safe mode should be running (restored after a reboot or when the app opens). */
+    var filterWanted: Boolean
+        get() = sp.getBoolean("filter_wanted", false)
+        set(v) = sp.edit().putBoolean("filter_wanted", v).apply()
+
+    /** SHA-256 of the Safe mode PIN; empty when there is no PIN. */
+    var filterPinHash: String
+        get() = sp.getString("filter_pin", "") ?: ""
+        set(v) = sp.edit().putString("filter_pin", v).apply()
+
+    /** Sites the user added to the Safe mode blocklist. */
+    var extraBlocked: Set<String>
+        get() = sp.getStringSet("extra_blocked", emptySet()) ?: emptySet()
+        set(v) = sp.edit().putStringSet("extra_blocked", v).apply()
+
+    /** Offline notes and to-dos, newest last. */
+    var notes: List<String>
+        get() {
+            val arr = JSONArray(sp.getString("notes", "[]"))
+            return List(arr.length()) { arr.getString(it) }
+        }
+        set(v) = sp.edit().putString("notes", JSONArray(v).toString()).apply()
+
     companion object {
         val MODELS = listOf(
             "claude-opus-5-5" to "Opus 5.5 · smartest (default)",

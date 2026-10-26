@@ -27,9 +27,16 @@ class OfflineBrain(private val ctx: Context, host: Host) {
             ))
             return
         }
+        // Instant answers that need no tool.
+        val quick = Calc.tryAnswer(text) ?: Units.tryAnswer(text) ?: Clock.tryAnswer(text)
+            ?: if (Regex("^(how|where)\\b").containsMatchIn(lower) || "boot" in lower) TecnoGuide.tryAnswer(text) else null
+        if (quick != null) {
+            onEvent(Agent.Event.Reply(quick))
+            return
+        }
         val steps = plan(lower, text)
         if (steps.isEmpty()) {
-            onEvent(Agent.Event.Reply(HELP))
+            onEvent(Agent.Event.Reply(TecnoGuide.tryAnswer(text) ?: HELP))
             return
         }
         for (s in steps.distinctBy { it.tool + it.args }) {
@@ -62,13 +69,25 @@ class OfflineBrain(private val ctx: Context, host: Host) {
     private fun plan(lower: String, original: String): List<Step> {
         // Reminders keep their whole text ("remind me to buy milk and eggs in 2 hours").
         if (Regex("\\bremind me\\b").containsMatchIn(lower)) return listOfNotNull(reminder(lower, original))
+        safeMode(lower)?.let { return listOf(it) }
+        Regex("^(?:block|ban)\\s+(?:the\\s+)?(?:site|website)?\\s*([a-z0-9-]+(?:\\.[a-z0-9-]+)+)").find(lower.trim())?.let {
+            return listOf(Step("block_site", mapOf("site" to it.groupValues[1])))
+        }
+        Regex("^(?:add (?:a )?note|note|write down|jot down|add to (?:my )?(?:list|to-?do)|to-?do)[:\\s]+(.+)$", RegexOption.IGNORE_CASE)
+            .find(original.trim())?.let { return listOf(Step("notes", mapOf("action" to "add", "text" to it.groupValues[1]))) }
+        Regex("\\b(?:delete|remove|clear)\\s+(?:my\\s+)?(?:all\\s+)?notes?\\s*#?(\\d+|all)?").find(lower)?.let {
+            return listOf(Step("notes", mapOf("action" to "remove", "text" to it.groupValues[1].ifEmpty { "all" })))
+        }
+        if (Regex("\\b(my notes|show (my )?notes|list (my )?notes|read (my )?notes|to-?do list|my list)\\b").containsMatchIn(lower)) {
+            return listOf(Step("notes", mapOf("action" to "list"), "Your notes"))
+        }
         Regex("^remember( that)?\\s+(.+)", RegexOption.IGNORE_CASE).find(original.trim())?.let {
             return listOf(Step("remember", mapOf("fact" to it.groupValues[2])))
         }
         if (Regex("\\b(forget|delete) (everything|all) (you know|about me)").containsMatchIn(lower)) {
             return listOf(Step("forget", mapOf("match" to "everything")))
         }
-        if (Regex("\\b(delete|remove|bin|trash)\\b").containsMatchIn(lower) && !Regex("\\b(apps?|duplicates?|screenshots?)\\b").containsMatchIn(lower)) {
+        if (Regex("\\b(delete|remove|bin|trash)\\b").containsMatchIn(lower) && !Regex("\\b(apps?|duplicates?|screenshots?|notes?)\\b").containsMatchIn(lower)) {
             val ids = Regex("#?(\\d+)").findAll(lower).map { it.groupValues[1].toLong() }.toList()
             when {
                 ids.isNotEmpty() -> return listOf(Step("delete_media", mapOf("ids" to ids)))
@@ -179,6 +198,9 @@ class OfflineBrain(private val ctx: Context, host: Host) {
             has("\\bduplicate") -> Step("find_duplicate_photos", title = "Duplicate photos and videos")
             has("\\bscreenshot") -> Step("find_old_screenshots", mapOf("older_than_days" to (Regex("(\\d+)\\s*day").find(c)?.groupValues?.get(1)?.toInt() ?: 30)), "Old screenshots")
             has("\\b(big|large|largest|biggest|huge) (files?|videos?|photos?)") -> Step("find_large_files", title = "Biggest files")
+            has("\\b(biggest|largest|heaviest) apps|apps? (are )?(taking|using|eating) (up )?(the most )?(space|storage)") -> Step("largest_apps", title = "Biggest apps")
+            has("\\b(data usage|data use|using (my |all my )?data|uses? (the most |my |all my )?data|data (is )?(finish|finishing|gone|running out)|bundle|mbs?\\b)") ->
+                Step("data_usage", mapOf("network" to if ("wifi" in c || "wi-fi" in c) "wifi" else "mobile"), "Data usage")
             has("\\b(bloat|debloat|pre-?installed|preloaded|ads?\\b|adverts?)") -> Step("bloatware_report", title = "Preinstalled extras")
             has("\\b(unused|never use|don'?t use|remove (some )?apps|apps (to|i can|can i|should i) (remove|delete|uninstall|get rid of)|uninstall)") ->
                 Step("unused_apps", title = "Apps you don't use")
@@ -199,6 +221,18 @@ class OfflineBrain(private val ctx: Context, host: Host) {
     }
 
     // ---- parsing helpers --------------------------------------------------------------------
+
+    private fun safeMode(c: String): Step? {
+        if ("boot" in c) return null
+        val topic = Regex("\\b(safe ?mode|safe browsing|content filter|parental control|adult (content|sites?)|porn|pornograph|nsfw|explicit|mature content|18\\+)").containsMatchIn(c)
+        if (!topic) return null
+        val action = when {
+            Regex("\\b(status|is .* on|working|how many|blocked so far)\\b").containsMatchIn(c) -> "status"
+            Regex("\\b(off|disable|stop|deactivate|unblock|allow)\\b").containsMatchIn(c) -> "off"
+            else -> "on"
+        }
+        return Step("safe_mode", mapOf("action" to action), "Safe mode")
+    }
 
     private fun settingsPage(s: String): String? {
         val aliases = listOf(
@@ -285,6 +319,11 @@ class OfflineBrain(private val ctx: Context, host: Host) {
             - "brightness 30%" · "flashlight on" · "silent" · "do not disturb on" · "volume 70"
             - "alarm at 6:30" · "timer 10 minutes" · "remind me in 20 minutes to call mum"
             - "open WhatsApp" · "open wifi settings" · "night mode"
+            - "block porn" / "safe mode on" · "block site example.com"
+            - "what's using my data?" · "biggest apps"
+            - "note buy bread" · "my notes" · "delete note 2"
+            - "15% of 2400" · "5 km to miles" · "what time is it"
+            - "how do I take a screenshot?" and other Tecno how-tos
             Combine them: "brightness 20, dnd on and alarm at 6".
         """.trimIndent()
     }

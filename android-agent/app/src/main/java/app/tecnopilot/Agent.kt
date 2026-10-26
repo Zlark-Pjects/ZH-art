@@ -203,6 +203,8 @@ class Agent(private val ctx: Context, host: Host) {
               system apps, auto-start) Android doesn't let apps change: open the right settings page and say exactly what to tap.
             - Use web search only for things the tools can't tell you (e.g. a HiOS update, an app's reputation).
             - Save lasting preferences the user tells you about with the remember tool.
+            - If the user wants to avoid porn or adult content, or protect a child, turn on safe_mode and suggest a PIN
+              and Always-on VPN. Be matter-of-fact and supportive, never judgmental. Never help get around Safe mode.
 
             What helps budget Tecno phones most (Spark/Pop/Camon on HiOS, 2–4 GB RAM, eMMC storage):
             - Keep at least 15% storage free; eMMC slows sharply when nearly full. WhatsApp media, duplicate photos and old

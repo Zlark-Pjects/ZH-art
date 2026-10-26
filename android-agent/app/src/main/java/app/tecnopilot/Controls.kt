@@ -18,6 +18,8 @@ interface Host {
     fun launch(intent: Intent): Boolean
     /** Shows a system confirmation (e.g. "Allow Tecno Pilot to delete 12 photos?") and waits for the answer. */
     fun confirm(sender: IntentSender): Boolean
+    /** Starts an activity for a result (e.g. the VPN consent screen) and waits for OK/cancel. */
+    fun launchForResult(intent: Intent): Boolean
 }
 
 object Controls {
