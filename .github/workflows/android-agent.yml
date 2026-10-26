@@ -35,6 +35,10 @@ jobs:
 
       - uses: gradle/actions/setup-gradle@v4
 
+      # A build that can't open, or whose tools or offline commands crash, is never published.
+      - name: Startup and feature tests
+        run: ./gradlew --no-daemon testReleaseUnitTest -PversionCode=$VERSION_CODE
+
       - name: Build release APK
         run: ./gradlew --no-daemon assembleRelease -PversionCode=$VERSION_CODE
 

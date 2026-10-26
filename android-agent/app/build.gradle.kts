@@ -46,6 +46,10 @@ android {
         jvmTarget = "17"
     }
 
+    testOptions {
+        unitTests.isIncludeAndroidResources = true
+    }
+
     packaging {
         resources {
             excludes += setOf(
@@ -62,4 +66,6 @@ android {
 
 dependencies {
     implementation("com.anthropic:anthropic-java:2.34.0")
+    testImplementation("junit:junit:4.13.2")
+    testImplementation("org.robolectric:robolectric:4.14.1")
 }

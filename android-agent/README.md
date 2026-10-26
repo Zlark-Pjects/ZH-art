@@ -42,6 +42,10 @@ Setup › Online / offline chooses **Auto** (the default: Claude when online, on
 
 The chat uses your API key and is billed to your Anthropic account. Setup lets you pick the model: Opus 5.5 (default, smartest), Sonnet 5.5, or Haiku 5.5 (cheapest). You can also set the thinking effort. The Doctor tab, the background checks and the alerts never call the API.
 
+## If the app won't open
+
+Install it from the release link above. APKs built any other way (for example the early test files shared in chat) can crash on start. If Pilot ever closes unexpectedly, it saves the error and shows it the next time it opens, ready to copy.
+
 ## Privacy
 
 The API key and everything Pilot remembers are stored in the app's private storage on the phone. Phone data goes to Claude only as tool results while you're chatting. For example, the file list after you ask to free space, or your notifications after you ask what you missed. Notifications are held in memory only, never written to disk.
@@ -55,7 +59,7 @@ cd android-agent
 ./gradlew assembleRelease     # app/build/outputs/apk/release/app-release.apk
 ```
 
-CI (`.github/workflows/android-agent.yml`) builds it on every push that touches `android-agent/`, numbers it from the build number, and publishes it to the `tecno-pilot-latest` release that the app updates from. Both builds are signed with `app/sideload.jks`, a sideloading key checked into the repo so that every new build installs over the previous one. It is not a Play Store key.
+CI (`.github/workflows/android-agent.yml`) first runs Robolectric tests (the app must open, every tab must work, and no tool or offline command may throw; `app/src/test/`), then builds it on every push that touches `android-agent/`, numbers it from the build number, and publishes it to the `tecno-pilot-latest` release that the app updates from. Both builds are signed with `app/sideload.jks`, a sideloading key checked into the repo so that every new build installs over the previous one. It is not a Play Store key.
 
 ## Layout
 

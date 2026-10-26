@@ -100,6 +100,10 @@ class MainActivity : Activity(), Host {
         PilotJobService.schedule(this)
         handleLaunchIntent(intent)
         checkUpdatesQuietly()
+        PilotApp.takeCrash(this)?.let { report ->
+            bubble("⚠️ Pilot closed unexpectedly last time. Long-press this message to copy the report and send it to whoever maintains the app:\n\n$report",
+                mine = false, color = C.WARN)
+        }
         worker.execute { runCatching { BatteryLog.record(this) } }
         if (Build.VERSION.SDK_INT >= 33 &&
             checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
