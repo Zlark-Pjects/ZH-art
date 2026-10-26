@@ -32,3 +32,44 @@ test("the city plays with the on-screen joystick", async ({ page }) => {
   await play.getByRole("button", { name: "Phone" }).first().tap();
   await expect(play.getByRole("dialog", { name: "Phone" })).toBeVisible();
 });
+
+test("battle royale plays with the phone sticks and buttons", async ({ page }) => {
+  const { existsSync } = await import("node:fs");
+  const file = process.cwd() + "/dist-stickville/stickville.html";
+  test.skip(!existsSync(file), "needs `npm run build:stickville` first");
+  type G = { you: { x: number; mag?: number; skillCd: number; rollCd: number; guns: ({ mag: number } | null)[]; cur: number; ammo: Record<string, number> }; phase: string; update(dt: number): void };
+  await page.goto("file://" + file + "?cheats");
+  await page.getByRole("button", { name: "Drop in" }).tap();
+  await expect(page.getByTestId("battle")).toBeVisible();
+  await page.evaluate(() => {
+    const s = (window as unknown as { stickbr: G }).stickbr;
+    for (let i = 0; i < 60 * 14; i++) s.update(1 / 60);
+  });
+  await page.evaluate(() => {
+    const s = (window as unknown as { stickbr: G }).stickbr;
+    s.you.guns[0] = { mag: 30 };
+    (s.you.guns[0] as unknown as { id: string }).id = "ar";
+    s.you.cur = 0;
+    s.you.ammo.med = 60;
+  });
+  const x0 = await page.evaluate(() => (window as unknown as { stickbr: G }).stickbr.you.x);
+  const move = page.getByRole("slider", { name: "Move" });
+  const m = (await move.boundingBox())!;
+  await move.dispatchEvent("pointerdown", { clientX: m.x + m.width / 2, clientY: m.y + m.height / 2, pointerId: 3 });
+  await move.dispatchEvent("pointermove", { clientX: m.x + m.width / 2 + 50, clientY: m.y + m.height / 2, pointerId: 3 });
+  await expect.poll(() => page.evaluate(() => (window as unknown as { stickbr: G }).stickbr.you.x)).toBeGreaterThan(x0 + 60);
+  await move.dispatchEvent("pointerup", { pointerId: 3 });
+
+  await page.getByRole("button", { name: "Roll" }).tap();
+  await expect.poll(() => page.evaluate(() => (window as unknown as { stickbr: G }).stickbr.you.rollCd)).toBeGreaterThan(0);
+  await page.getByRole("button", { name: /^Skill:/ }).tap();
+  await expect.poll(() => page.evaluate(() => (window as unknown as { stickbr: G }).stickbr.you.skillCd)).toBeGreaterThan(0);
+
+  // Push the aim stick all the way: it shoots
+  const aim = page.getByRole("slider", { name: "Aim" });
+  const a = (await aim.boundingBox())!;
+  await aim.dispatchEvent("pointerdown", { clientX: a.x + a.width / 2, clientY: a.y + a.height / 2, pointerId: 4 });
+  await aim.dispatchEvent("pointermove", { clientX: a.x + a.width / 2 - 55, clientY: a.y + a.height / 2, pointerId: 4 });
+  await expect.poll(() => page.evaluate(() => (window as unknown as { stickbr: G }).stickbr.you.guns[0]!.mag)).toBeLessThan(30);
+  await aim.dispatchEvent("pointerup", { pointerId: 4 });
+});
