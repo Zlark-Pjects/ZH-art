@@ -26,6 +26,11 @@ class Prefs(context: Context) {
         get() = sp.getString("mode", "auto") ?: "auto"
         set(v) = sp.edit().putString("mode", v).apply()
 
+    /** After a voice command, listen again once Pilot has answered (hands-free). */
+    var conversationMode: Boolean
+        get() = sp.getBoolean("conversation", false)
+        set(v) = sp.edit().putBoolean("conversation", v).apply()
+
     var speakReplies: Boolean
         get() = sp.getBoolean("speak", false)
         set(v) = sp.edit().putBoolean("speak", v).apply()

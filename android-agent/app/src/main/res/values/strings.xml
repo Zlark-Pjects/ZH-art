@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="shortcut_voice">Voice command</string>
+    <string name="shortcut_voice_long">Talk to Tecno Pilot</string>
+    <string name="shortcut_checkup">Checkup</string>
+</resources>

@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+    <shortcut
+        android:shortcutId="voice"
+        android:enabled="true"
+        android:icon="@drawable/ic_launcher_fg"
+        android:shortcutShortLabel="@string/shortcut_voice"
+        android:shortcutLongLabel="@string/shortcut_voice_long">
+        <intent
+            android:action="app.tecnopilot.VOICE"
+            android:targetPackage="app.tecnopilot"
+            android:targetClass="app.tecnopilot.MainActivity" />
+    </shortcut>
+</shortcuts>

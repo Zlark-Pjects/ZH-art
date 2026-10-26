@@ -50,7 +50,8 @@ class MainActivity : Activity(), Host {
     private val worker = Executors.newCachedThreadPool()
     private lateinit var prefs: Prefs
     private lateinit var agent: Agent
-    private var tts: TextToSpeech? = null
+    private lateinit var voice: Voice
+    private lateinit var micBtn: ImageButton
 
     private lateinit var pages: List<View>
     private lateinit var tabs: List<TextView>
@@ -74,6 +75,7 @@ class MainActivity : Activity(), Host {
         super.onCreate(savedInstanceState)
         prefs = Prefs(this)
         agent = Agent(this, this)
+        voice = Voice(this)
         window.statusBarColor = C.BG
         window.navigationBarColor = C.BG
 
@@ -96,6 +98,7 @@ class MainActivity : Activity(), Host {
             runCatching { ContentFilter.start(this) }
         }
         PilotJobService.schedule(this)
+        handleLaunchIntent(intent)
         worker.execute { runCatching { BatteryLog.record(this) } }
         if (Build.VERSION.SDK_INT >= 33 &&
             checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
@@ -111,7 +114,7 @@ class MainActivity : Activity(), Host {
 
     override fun onDestroy() {
         netCallback?.let { runCatching { getSystemService(ConnectivityManager::class.java).unregisterNetworkCallback(it) } }
-        tts?.shutdown()
+        voice.shutdown()
         worker.shutdownNow()
         super.onDestroy()
     }
@@ -250,7 +253,7 @@ class MainActivity : Activity(), Host {
             imeOptions = EditorInfo.IME_ACTION_SEND
             setOnEditorActionListener { _, id, _ -> if (id == EditorInfo.IME_ACTION_SEND) { send(); true } else false }
         }
-        val mic = iconButton(android.R.drawable.ic_btn_speak_now, "Speak") { listen() }
+        val mic = iconButton(android.R.drawable.ic_btn_speak_now, "Speak") { listen() }.also { micBtn = it }
         sendBtn = iconButton(android.R.drawable.ic_menu_send, "Send") { send() }
         val bar = row(input, mic, sendBtn).apply { setPadding(dp(10), dp(6), dp(10), dp(10)) }
         input.layoutParams = lp(w = 0, weight = 1f)
@@ -294,12 +297,17 @@ class MainActivity : Activity(), Host {
         }
     }
 
-    private fun send(preset: String? = null) {
+    private fun send(preset: String? = null, fromVoice: Boolean = false) {
         val msg = (preset ?: input.text.toString()).trim()
         if (msg.isEmpty() || thinking) return
         show(0)
         input.setText("")
         bubble(msg, mine = true)
+        if (fromVoice && Regex("^(stop|cancel|bye|goodbye|that'?s all|never mind|nothing)[.!]?$", RegexOption.IGNORE_CASE).matches(msg)) {
+            bubble("Okay. Tap the mic when you need me.", mine = false)
+            voice.speak("Okay.")
+            return
+        }
         if (msg.lowercase() in setOf("/new", "new chat", "/reset")) {
             agent.reset()
             bubble("Started a fresh conversation.", mine = false)
@@ -315,9 +323,9 @@ class MainActivity : Activity(), Host {
                     when (e) {
                         is Agent.Event.Busy -> setBusy(e.what)
                         is Agent.Event.Reply -> {
-                            setBusy(null); bubble(e.text, mine = false); speak(e.text); setBusy("Working")
+                            setBusy(null); bubble(e.text, mine = false); speak(e.text, fromVoice); setBusy("Working")
                         }
-                        is Agent.Event.Problem -> { setBusy(null); bubble(e.text, mine = false, color = C.WARN) }
+                        is Agent.Event.Problem -> { setBusy(null); bubble(e.text, mine = false, color = C.WARN); if (fromVoice) voice.speak(e.text) }
                     }
                 }
             }
@@ -325,33 +333,75 @@ class MainActivity : Activity(), Host {
                 setBusy(null)
                 thinking = false
                 sendBtn.isEnabled = true
+                if (fromVoice && prefs.conversationMode) listenAfterSpeaking()
             }
         }
     }
 
+    // ---- voice ----------------------------------------------------------------------------------
+
+    private val voiceListener = object : Voice.Listener {
+        override fun onPartial(text: String) = showListening("🎙 $text…")
+        override fun onHeard(text: String) { showListening(null); send(text, fromVoice = true) }
+        override fun onVoiceError(message: String, offerDownload: Boolean) {
+            showListening(null)
+            bubble(message, mine = false, color = C.WARN)
+        }
+        override fun onListeningChanged(listening: Boolean) {
+            micBtn.background = rounded(this@MainActivity, if (listening) C.CRIT else C.ACCENT, 22)
+            if (listening) showListening("🎙 Listening… speak now") else if (listeningLine?.text?.startsWith("🎙 Listening") == true) showListening(null)
+        }
+    }
+
+    private var listeningLine: TextView? = null
+
+    private fun showListening(s: String?) {
+        if (s == null) { listeningLine?.let { chatList.removeView(it) }; listeningLine = null; return }
+        val line = listeningLine ?: text("", 14f, C.ACCENT).also { chatList.addView(it, lp(top = dp(8))); listeningLine = it }
+        line.text = s
+        scrollDown()
+    }
+
+    /** Mic button: start listening (asking for the microphone once), or stop. */
     private fun listen() {
+        show(0)
+        if (voice.listening) { voice.stopListening(); voiceListener.onListeningChanged(false); return }
+        if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+            requestPermissions(arrayOf(Manifest.permission.RECORD_AUDIO), REQ_MIC)
+            return
+        }
+        if (voice.available()) { voice.listen(voiceListener); return }
+        // No speech service at all: fall back to the system voice-typing screen.
         val i = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH)
             .putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+            .putExtra(RecognizerIntent.EXTRA_PREFER_OFFLINE, true)
             .putExtra(RecognizerIntent.EXTRA_PROMPT, "Ask Pilot")
         try {
             startActivityForResult(i, REQ_VOICE)
         } catch (e: ActivityNotFoundException) {
-            toast("No voice typing on this phone. Install or update the Google app.")
+            toast("No speech recognition on this phone. Install or update the Google app, then download offline voice in Setup.")
         }
     }
 
-    private fun speak(s: String) {
-        if (!prefs.speakReplies) return
-        val clean = s.replace(Regex("[*#•`]"), "")
-        val engine = tts
-        if (engine == null) {
-            tts = TextToSpeech(this) { status ->
-                if (status == TextToSpeech.SUCCESS) {
-                    tts?.language = Locale.getDefault()
-                    tts?.speak(clean, TextToSpeech.QUEUE_ADD, null, "pilot")
-                }
-            }
-        } else engine.speak(clean, TextToSpeech.QUEUE_ADD, null, "pilot")
+    /** Conversation mode: once the spoken answer ends, listen for the next command. */
+    private fun listenAfterSpeaking() {
+        val go = { ui.postDelayed({ if (!voice.listening && !thinking) listen() }, 400) }
+        if (voice.isSpeaking()) voice.onSpokenAll = { voice.onSpokenAll = null; ui.post { go() } }
+        else ui.postDelayed({ if (voice.isSpeaking()) voice.onSpokenAll = { voice.onSpokenAll = null; ui.post { go() } } else go() }, 700)
+    }
+
+    private fun handleLaunchIntent(i: Intent?) {
+        if (i?.action == Intent.ACTION_ASSIST || i?.action == ACTION_VOICE) chatScroll.post { listen() }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        handleLaunchIntent(intent)
+    }
+
+    private fun speak(s: String, fromVoice: Boolean) {
+        if (prefs.speakReplies || fromVoice) voice.speak(s)
     }
 
     // ---- Doctor (offline dashboard) ------------------------------------------------------------
@@ -517,6 +567,7 @@ class MainActivity : Activity(), Host {
         ), lp(top = dp(12)))
 
         col.addView(safeModeCard(), lp(top = dp(12)))
+        col.addView(voiceCard(), lp(top = dp(12)))
 
         val models = RadioGroup(this)
         Prefs.MODELS.forEachIndexed { i, (id, label) ->
@@ -545,7 +596,6 @@ class MainActivity : Activity(), Host {
         screenGroup.setOnCheckedChangeListener { _, checked -> prefs.screenLimitMin = screenLimits[checked - 500] }
         col.addView(card(
             text("Habits", 16f, bold = true),
-            switch("Read replies aloud", prefs.speakReplies) { prefs.speakReplies = it },
             switch("Daily health notification", prefs.dailyCheckup) { prefs.dailyCheckup = it },
             text("Charge alert: tell me to unplug at", 14f).apply { layoutParams = lp(top = dp(8)) },
             limits,
@@ -571,6 +621,31 @@ class MainActivity : Activity(), Host {
             }.apply { layoutParams = lp(top = dp(10)) },
         ), lp(top = dp(12)))
         return ScrollView(this).apply { addView(col) }
+    }
+
+    // ---- Voice settings ---------------------------------------------------------------------------
+
+    private fun voiceCard(): View {
+        val engine = when (voice.engineName()) {
+            "on-device" -> "This phone has on-device speech recognition: voice works with no internet."
+            "offline-preferred" -> "Voice uses the phone's speech service in offline mode. Download the offline pack once so it works without internet."
+            else -> "No speech service found. Install or update the Google app, then download the offline pack."
+        }
+        return card(
+            text("🎙 Voice", 16f, bold = true),
+            text("$engine Tap the mic in Pilot and speak a command, such as \"brightness thirty percent\", \"alarm at six thirty\" or \"block porn\".", 13f, C.SUB),
+            switch("Read all replies aloud", prefs.speakReplies) { prefs.speakReplies = it },
+            switch("Conversation mode (keep listening after each answer; say \"stop\" to end)", prefs.conversationMode) { prefs.conversationMode = it },
+            row(
+                button("Get offline voice", primary = false) { voice.downloadOfflineModel(this) },
+                button("Make Pilot my assistant", primary = false) {
+                    toast("Choose Tecno Pilot as 'Digital assistant app'. Then hold Home to talk to Pilot.")
+                    if (!launch(Intent(Settings.ACTION_VOICE_INPUT_SETTINGS))) launch(Intent(Settings.ACTION_MANAGE_DEFAULT_APPS_SETTINGS))
+                }.apply { layoutParams = LinearLayout.LayoutParams(-2, -2).apply { leftMargin = dp(8) } },
+            ).apply { layoutParams = lp(top = dp(8)) },
+            text("Tip: long-press the Tecno Pilot icon for a 'Voice command' shortcut you can drag to the home screen.", 12f, C.SUB)
+                .apply { layoutParams = lp(top = dp(8)) },
+        )
     }
 
     // ---- Safe mode ------------------------------------------------------------------------------
@@ -786,12 +861,16 @@ class MainActivity : Activity(), Host {
                 confirmResult = resultCode == RESULT_OK
                 confirmLatch?.countDown()
             }
-            REQ_VOICE -> data?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)?.firstOrNull()?.let { send(it) }
+            REQ_VOICE -> data?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)?.firstOrNull()?.let { send(it, fromVoice = true) }
         }
     }
 
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode == REQ_MIC) {
+            if (grantResults.firstOrNull() == PackageManager.PERMISSION_GRANTED) listen()
+            else toast("Voice commands need the microphone")
+        }
         refreshPermissions()
     }
 
@@ -802,5 +881,7 @@ class MainActivity : Activity(), Host {
         private const val REQ_VOICE = 12
         private const val REQ_MEDIA = 13
         private const val REQ_NOTIF = 14
+        private const val REQ_MIC = 15
+        const val ACTION_VOICE = "app.tecnopilot.VOICE"
     }
 }

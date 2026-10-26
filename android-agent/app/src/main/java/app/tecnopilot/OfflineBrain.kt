@@ -18,7 +18,8 @@ class OfflineBrain(private val ctx: Context, host: Host) {
     private class Step(val tool: String, val args: Map<String, Any?> = emptyMap(), val title: String? = null)
 
     fun handle(message: String, onEvent: (Agent.Event) -> Unit) {
-        val text = message.trim()
+        // Voice gives "thirty percent" and "six thirty"; commands want digits.
+        val text = SpokenNumbers.normalize(message.trim())
         val lower = text.lowercase()
         if (lower.startsWith("here is")) {
             onEvent(Agent.Event.Reply(
