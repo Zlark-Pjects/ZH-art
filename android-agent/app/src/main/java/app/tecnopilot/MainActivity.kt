@@ -99,6 +99,7 @@ class MainActivity : Activity(), Host {
         }
         PilotJobService.schedule(this)
         handleLaunchIntent(intent)
+        checkUpdatesQuietly()
         worker.execute { runCatching { BatteryLog.record(this) } }
         if (Build.VERSION.SDK_INT >= 33 &&
             checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
@@ -568,6 +569,7 @@ class MainActivity : Activity(), Host {
 
         col.addView(safeModeCard(), lp(top = dp(12)))
         col.addView(voiceCard(), lp(top = dp(12)))
+        col.addView(updatesCard(), lp(top = dp(12)))
 
         val models = RadioGroup(this)
         Prefs.MODELS.forEachIndexed { i, (id, label) ->
@@ -621,6 +623,72 @@ class MainActivity : Activity(), Host {
             }.apply { layoutParams = lp(top = dp(10)) },
         ), lp(top = dp(12)))
         return ScrollView(this).apply { addView(col) }
+    }
+
+    // ---- Updates ------------------------------------------------------------------------------
+
+    private lateinit var updateStatus: TextView
+    private lateinit var updateBtn: TextView
+    private var pendingRelease: Updater.Release? = null
+
+    private fun updatesCard(): View {
+        updateStatus = text("You have version ${Updater.currentName(this)}.", 13f, C.SUB)
+        updateBtn = button("Check for updates") { onUpdateButton() }
+        return card(
+            text("⬆️ Updates", 16f, bold = true),
+            text("New versions are built on GitHub whenever the app is improved. Pilot downloads them from there, " +
+                "checks them, and installs over itself — settings, notes and Safe mode are kept.", 13f, C.SUB),
+            updateStatus.apply { layoutParams = lp(top = dp(8)) },
+            updateBtn.apply { layoutParams = lp(top = dp(10)) },
+            switch("Check once a day and notify me", prefs.autoUpdateCheck) { prefs.autoUpdateCheck = it },
+        )
+    }
+
+    private fun onUpdateButton() {
+        val r = pendingRelease
+        if (r == null) {
+            updateStatus.text = "Checking…"
+            worker.execute {
+                val (msg, rel) = Updater.check(this)
+                ui.post {
+                    updateStatus.text = msg
+                    pendingRelease = rel
+                    updateBtn.text = if (rel != null) "Download and install ${rel.name}" else "Check for updates"
+                }
+            }
+            return
+        }
+        if (!Updater.canInstall(this)) {
+            toast("Allow 'Install unknown apps' for Tecno Pilot, then tap the button again")
+            launch(Updater.allowInstallsIntent(this))
+            return
+        }
+        updateBtn.isEnabled = false
+        worker.execute {
+            val result = runCatching {
+                val apk = Updater.download(this, r) { p -> ui.post { updateStatus.text = "Downloading… $p%" } }
+                ui.post { updateStatus.text = "Installing… tap Update on Android's screen." }
+                Updater.install(this, apk)
+            }
+            ui.post {
+                updateBtn.isEnabled = true
+                result.onFailure { updateStatus.text = "Update failed: ${it.message}" }
+            }
+        }
+    }
+
+    /** At most every 12 hours, check quietly and mention a new version in the chat. */
+    private fun checkUpdatesQuietly() {
+        if (!prefs.autoUpdateCheck || System.currentTimeMillis() - prefs.lastUpdateCheck < 12 * 3_600_000L) return
+        worker.execute {
+            val (msg, r) = Updater.check(this)
+            if (r != null) ui.post {
+                pendingRelease = r
+                updateStatus.text = msg
+                updateBtn.text = "Download and install ${r.name}"
+                bubble("⬆️ $msg\n\nSay \"update the app\" or open Setup › Updates.", mine = false)
+            }
+        }
     }
 
     // ---- Voice settings ---------------------------------------------------------------------------

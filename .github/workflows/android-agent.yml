@@ -11,14 +11,20 @@ concurrency:
   group: android-agent-${{ github.ref }}
   cancel-in-progress: true
 
+permissions:
+  contents: write
+
 jobs:
   build:
-    name: Build the Android app
+    name: Build and publish the Android app
     runs-on: ubuntu-latest
     timeout-minutes: 30
     defaults:
       run:
         working-directory: android-agent
+    env:
+      # Every build is newer than the last, so installed apps can update themselves.
+      VERSION_CODE: ${{ github.run_number }}0${{ github.run_attempt }}
     steps:
       - uses: actions/checkout@v4
 
@@ -30,13 +36,33 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
 
       - name: Build release APK
-        run: ./gradlew --no-daemon assembleRelease
+        run: ./gradlew --no-daemon assembleRelease -PversionCode=$VERSION_CODE
 
-      - name: Name the APK
-        run: cp app/build/outputs/apk/release/app-release.apk TecnoPilot.apk
+      - name: Name the APK and describe it
+        run: |
+          cp app/build/outputs/apk/release/app-release.apk TecnoPilot.apk
+          NOTES=$(git log -1 --format=%s)
+          SHA=$(sha256sum TecnoPilot.apk | cut -d' ' -f1)
+          SIZE=$(stat -c%s TecnoPilot.apk)
+          jq -n --argjson code "$VERSION_CODE" --arg name "1.$VERSION_CODE" --arg notes "$NOTES" \
+            --arg sha "$SHA" --argjson size "$SIZE" \
+            --arg apk "https://github.com/${{ github.repository }}/releases/download/tecno-pilot-latest/TecnoPilot.apk" \
+            '{versionCode: $code, versionName: $name, notes: $notes, sha256: $sha, size: $size, apk: $apk}' > version.json
+          cat version.json
 
       - uses: actions/upload-artifact@v4
         with:
           name: TecnoPilot-apk
           path: android-agent/TecnoPilot.apk
           retention-days: 30
+
+      - name: Publish for in-app updates
+        if: github.ref == 'refs/heads/claude/funny-mendel-mcr8j3' || github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release delete tecno-pilot-latest --cleanup-tag --yes || true
+          gh release create tecno-pilot-latest TecnoPilot.apk version.json \
+            --target "${{ github.sha }}" \
+            --title "Tecno Pilot (latest) 1.$VERSION_CODE" \
+            --notes "Install TecnoPilot.apk on your phone. Tecno Pilot also updates itself from here (Setup › Updates)."

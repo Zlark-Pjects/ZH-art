@@ -79,6 +79,19 @@ class Prefs(context: Context) {
         }
         set(v) = sp.edit().putString("notes", JSONArray(v).toString()).apply()
 
+    var autoUpdateCheck: Boolean
+        get() = sp.getBoolean("auto_update", true)
+        set(v) = sp.edit().putBoolean("auto_update", v).apply()
+
+    var lastUpdateCheck: Long
+        get() = sp.getLong("update_checked", 0)
+        set(v) = sp.edit().putLong("update_checked", v).apply()
+
+    /** Version code we last told the user about, so each update is announced once. */
+    var announcedVersion: Long
+        get() = sp.getLong("update_announced", 0)
+        set(v) = sp.edit().putLong("update_announced", v).apply()
+
     /** Daily screen-time alert in minutes; 0 = off. */
     var screenLimitMin: Int
         get() = sp.getInt("screen_limit", 0)

@@ -317,6 +317,25 @@ object Tools {
                 listOf(Param("length", "integer", "Default 16.")), "Making a password",
             ) { a -> Handy.password(a.int("length", 16)) },
             ToolSpec(
+                "update_app",
+                "Checks GitHub for a newer version of Tecno Pilot, or downloads and installs it (the user confirms Android's install screen). " +
+                    "Call for 'check for updates' / 'update the app'.",
+                listOf(Param("action", "string", "check or install.", required = true, enum = listOf("check", "install"))), "Checking for updates",
+            ) { a ->
+                val (msg, r) = Updater.check(ctx)
+                when {
+                    a.str("action", "check") != "install" || r == null -> msg
+                    !Updater.canInstall(ctx) -> {
+                        host.launch(Updater.allowInstallsIntent(ctx))
+                        "To update itself Pilot needs 'Install unknown apps'. I opened that screen: switch it on, then ask again."
+                    }
+                    else -> runCatching {
+                        Updater.install(ctx, Updater.download(ctx, r) {})
+                        "Downloaded version ${r.name}. Tap Update on Android's screen to install it."
+                    }.getOrElse { "Update failed: ${it.message}" }
+                }
+            },
+            ToolSpec(
                 "remember",
                 "Saves a short fact about the user or their preferences for future chats (\"prefers short answers\", \"uses WhatsApp Business\").",
                 listOf(Param("fact", "string", "One short sentence.", required = true)), "Remembering",

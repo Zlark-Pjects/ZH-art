@@ -29,12 +29,13 @@ Setup › Online / offline chooses **Auto** (the default: Claude when online, on
 | **Notes & to-dos** | "note buy bread", "my notes", "delete note 2", kept on the phone. |
 | **Offline extras** | Calculator ("15% of 2400"), unit converter ("5 km to miles", "2 GB to MB", "100 F in C"), time and date, the biggest apps, and a built-in Tecno/HiOS how-to guide (screenshots, Memory Fusion, developer options, hotspot, app lock, factory reset, safe-mode boot, IMEI, backups, overheating…). |
 | **🎙 Offline voice** | Tap the mic and speak; Pilot answers aloud. It uses Android's on-device speech recognition (Android 12+) or the phone's speech service in offline mode, so it works with no internet once the offline speech pack is downloaded (Setup › Voice › Get offline voice). Spoken numbers are understood ("brightness thirty percent", "alarm at half past six", "timer for ten minutes"). **Conversation mode** keeps listening after each answer until you say "stop". There's a **Voice command** shortcut on the app icon, and you can make Pilot your **digital assistant** so holding Home starts it. |
+| **⬆️ Self-update** | Every build is published to the `tecno-pilot-latest` GitHub release. Pilot checks it (Setup › Updates, "check for updates", or once a day), downloads the new APK, verifies its SHA-256 and installs over itself. Settings and data are kept. |
 | **More offline helpers** | "Good morning" briefing (battery, storage, notes, missed notifications, health), a "save battery" power-saver profile, a daily screen-time limit reminder, overheating and storage-full alerts, charging-time estimate, "share my phone report", password generator, coin flip and dice, "days until Christmas". |
 | **Daily health notification** | Once a day, the offline checkup's score and top issues, no API calls. |
 
 ## Install on the phone
 
-1. Get the APK: open the **Tecno Pilot APK** workflow run in this repo's GitHub Actions and download the `TecnoPilot-apk` artifact (or build it yourself, below).
+1. Get the APK on the phone: open **github.com/Zlark-Pjects/ZH-art/releases/tag/tecno-pilot-latest** and tap `TecnoPilot.apk` (or build it yourself, below).
 2. On the phone, open the APK and allow "Install unknown apps" for your browser or file manager when asked.
 3. Open Tecno Pilot. It works offline straight away. For online answers, go to **Setup** and paste a Claude API key (from console.anthropic.com › API keys). Tap **Allow** on each permission you want; every permission unlocks one tool, and the app still works without them.
 4. HiOS stops background apps aggressively. For the battery diary and charge alert, allow **Ignore battery optimisation** in Setup and allow auto-start for Tecno Pilot in **Phone Master**.
@@ -54,7 +55,7 @@ cd android-agent
 ./gradlew assembleRelease     # app/build/outputs/apk/release/app-release.apk
 ```
 
-CI (`.github/workflows/android-agent.yml`) builds it on every push that touches `android-agent/`. Both builds are signed with `app/sideload.jks`, a sideloading key checked into the repo so that every new build installs over the previous one. It is not a Play Store key.
+CI (`.github/workflows/android-agent.yml`) builds it on every push that touches `android-agent/`, numbers it from the build number, and publishes it to the `tecno-pilot-latest` release that the app updates from. Both builds are signed with `app/sideload.jks`, a sideloading key checked into the repo so that every new build installs over the previous one. It is not a Play Store key.
 
 ## Layout
 
@@ -65,6 +66,7 @@ app/src/main/java/app/tecnopilot/
   Tools.kt              The tool catalogue: names, descriptions, input schemas, handlers
   MainActivity.kt       Pilot chat, Doctor dashboard, Setup; system dialogs for delete/uninstall
   ContentFilter.kt      Safe mode: DNS-only VPN, adult-site blocklist, family resolver, PIN
+  Updater.kt            Self-update from GitHub releases (checksum, Android package installer)
   Voice.kt              Offline speech recognition, spoken replies, spoken-number parsing
   Extras.kt             Data usage, biggest apps, notes, calculator, unit converter, Tecno how-to guide
   BootReceiver.kt       Restores Safe mode and background checks after a restart

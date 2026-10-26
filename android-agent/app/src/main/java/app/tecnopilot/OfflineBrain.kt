@@ -91,6 +91,12 @@ class OfflineBrain(private val ctx: Context, host: Host) {
         if (Regex("\\b(screen ?time|phone) limit (off|none)|(remove|turn off|stop) (the )?screen ?time limit").containsMatchIn(lower)) {
             return listOf(Step("screen_time_limit", mapOf("minutes" to 0)))
         }
+        if (Regex("\\b(update (the |this |tecno )?(app|pilot)|install (the )?update|download (the )?update)\\b").containsMatchIn(lower)) {
+            return listOf(Step("update_app", mapOf("action" to "install"), "Update"))
+        }
+        if (Regex("\\b(check (for )?updates?|any updates?|new version|is there an update|latest version)\\b").containsMatchIn(lower)) {
+            return listOf(Step("update_app", mapOf("action" to "check"), "Updates"))
+        }
         if (Regex("\\b(share|send) (my |the |a )?(phone |health )?report\\b").containsMatchIn(lower)) return listOf(Step("share_report"))
         Regex("\\b(?:generate|make|create|new|give me) (?:a |me a )?(?:strong |random )?password(?: of)?\\s*(\\d+)?").find(lower)?.let {
             return listOf(Step("generate_password", mapOf("length" to (it.groupValues[1].toIntOrNull() ?: 16))))

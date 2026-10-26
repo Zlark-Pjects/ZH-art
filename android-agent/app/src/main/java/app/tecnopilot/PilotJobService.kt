@@ -27,10 +27,13 @@ class PilotJobService : JobService() {
                         chargeAlert(this)
                         healthAlerts(this)
                     }
-                    JOB_DAILY -> if (Prefs(this).dailyCheckup) {
-                        val r = Checkup.run(this)
-                        val worst = r.issues.take(3).joinToString(" · ") { it.title }
-                        notify(this, 2, "Phone health ${r.score}/100", worst.ifEmpty { "All good. Nothing to fix today." })
+                    JOB_DAILY -> {
+                        updateCheck(this)
+                        if (Prefs(this).dailyCheckup) {
+                            val r = Checkup.run(this)
+                            val worst = r.issues.take(3).joinToString(" · ") { it.title }
+                            notify(this, 2, "Phone health ${r.score}/100", worst.ifEmpty { "All good. Nothing to fix today." })
+                        }
                     }
                 }
             }
@@ -90,6 +93,17 @@ class PilotJobService : JobService() {
                 if (today >= limit * 60_000L && !prefs.alertedToday("screen")) {
                     notify(ctx, 6, "Screen time: ${duration(today)} today", "You set a daily limit of ${duration(limit * 60_000L)}. Time for a break? 🌿")
                 }
+            }
+        }
+
+        /** Tells the user once about each new version published on GitHub. */
+        fun updateCheck(ctx: Context) {
+            val prefs = Prefs(ctx)
+            if (!prefs.autoUpdateCheck || !Network.isOnline(ctx)) return
+            val (msg, r) = Updater.check(ctx)
+            if (r != null && r.code > prefs.announcedVersion) {
+                prefs.announcedVersion = r.code
+                notify(ctx, 8, "Tecno Pilot ${r.name} is available", msg.substringAfter("What's new: ", msg) + "\nOpen Pilot › Setup › Updates to install.")
             }
         }
 
